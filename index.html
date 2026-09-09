@@ -137,16 +137,6 @@
       flex:0 0 auto;
     }
 
-    .availability-note{
-      max-width:360px;
-      padding-right:2px;
-      font-size:9.5px;
-      line-height:1.2;
-      font-weight:500;
-      color:rgba(255,255,255,.78);
-      text-align:right;
-      white-space:normal;
-    }
 
     .status{
       display:flex;
@@ -440,6 +430,33 @@
       flex:0 0 auto;
     }
 
+    .availability-map-note{
+      display:flex;
+      align-items:flex-start;
+      gap:8px;
+      max-width:300px;
+      padding:10px 12px;
+      color:#4F566A;
+      font-size:9.5px;
+      line-height:1.35;
+      font-weight:600;
+    }
+
+    .availability-map-icon{
+      width:17px;
+      height:17px;
+      border-radius:50%;
+      flex:0 0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--amarillo);
+      color:var(--azul);
+      font-size:10px;
+      font-weight:900;
+      margin-top:1px;
+    }
+
     .leaflet-popup-content-wrapper{
       border-radius:16px;
       box-shadow:0 14px 38px rgba(26,25,89,.25);
@@ -684,7 +701,6 @@
       .header-row{align-items:flex-start}
       .header-status-group{align-items:flex-end}
       .header-actions .status{display:none}
-      .availability-note{display:none}
       .content{display:block}
       .sidebar{border-right:0;border-bottom:1px solid var(--borde)}
       .project-list{max-height:280px}
@@ -730,9 +746,6 @@
           <button class="btn btn-light" id="refreshBtn" title="Actualizar datos desde Google Sheets">
             <span>↻</span> <b>Actualizar</b>
           </button>
-        </div>
-        <div class="availability-note">
-          Información sujeta a disponibilidad de las viviendas de cada proyecto.
         </div>
       </div>
     </div>
@@ -803,9 +816,9 @@
         Para probar OpenStreetMap correctamente, abre <b>iniciar_geovisor.bat</b>.
         Al publicarlo en GitHub Pages o en el servidor institucional funcionará normalmente.
       </div>
-      <div class="map-legend">
-        <div class="legend-row"><span class="legend-dot"></span><span>Un punto = un proyecto</span></div>
-        <div>Los proyectos con el mismo nombre se agrupan; sus viviendas se suman.</div>
+      <div class="map-legend availability-map-note">
+        <div class="availability-map-icon">i</div>
+        <div>Información sujeta a disponibilidad de las viviendas de cada proyecto.</div>
       </div>
       <div class="loading-cover" id="loadingCover">
         <div class="loading-box"><span class="spinner"></span> Cargando información…</div>
@@ -980,6 +993,22 @@
     const original = String(projectName ?? "").trim();
     const normalized = normalizeProjectName(original);
     if (!normalized) return original;
+
+    // Regla específica solicitada para la familia DURAN CITY:
+    // cualquier variante que empiece por "DURAN CITY " se consolida
+    // bajo el proyecto principal "DURAN CITY", incluyendo nombres como
+    // "DURAN CITY CAMELIA 2", "DURAN CITY CAM MZ 12 SL 2", etc.
+    const duranCityBase = exactProjectNames.find(
+      name => normalizeProjectName(name) === "DURAN CITY"
+    );
+
+    if (
+      duranCityBase &&
+      normalized !== "DURAN CITY" &&
+      normalized.startsWith("DURAN CITY ")
+    ) {
+      return duranCityBase;
+    }
 
     // A) Caso más seguro: existe un nombre de proyecto exacto más corto
     // que es el prefijo del nombre largo, y lo restante parece una variante.
