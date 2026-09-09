@@ -1324,7 +1324,7 @@
     const province = normalize($("provinciaSelect").value || "ECUADOR").replace(/\s+/g,"_");
     const canton = normalize($("cantonSelect").value || "").replace(/\s+/g,"_");
     const suffix = [province,canton].filter(Boolean).join("_");
-    const baseName = `PROYECTOS_YAPA_PA_TU_CASA_${suffix}_${date}`;
+    const baseName = `GEOVISOR PROYECTOS_YAPA_PA'_TU_CASA_${suffix}_${date}`;
 
     if (window.XLSX) {
       const ws = XLSX.utils.json_to_sheet(rows);
