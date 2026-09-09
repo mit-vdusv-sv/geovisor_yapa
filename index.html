@@ -329,6 +329,8 @@
     .project-card{
       width:100%;
       text-align:left;
+      content-visibility:auto;
+      contain-intrinsic-size:78px;
       border:1px solid var(--borde);
       background:#fff;
       border-radius:13px;
@@ -881,7 +883,12 @@
   const map = L.map("map", {
     zoomControl: false,
     minZoom: 5,
-    preferCanvas: true
+    preferCanvas: true,
+    zoomAnimation: true,
+    fadeAnimation: true,
+    markerZoomAnimation: false,
+    wheelDebounceTime: 25,
+    wheelPxPerZoomLevel: 90
   }).setView([-1.55, -78.35], 7);
 
   L.control.zoom({ position: "topright" }).addTo(map);
@@ -892,7 +899,11 @@
     {
       subdomains: "abc",
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors"
+      attribution: "&copy; OpenStreetMap contributors",
+      updateWhenZooming: false,
+      updateWhenIdle: false,
+      updateInterval: 180,
+      keepBuffer: 5
     }
   ).addTo(map);
 
@@ -904,9 +915,14 @@
 
   const markerCluster = L.markerClusterGroup({
     showCoverageOnHover: false,
-    maxClusterRadius: 48,
+    maxClusterRadius: 52,
     spiderfyOnMaxZoom: true,
-    disableClusteringAtZoom: 16
+    disableClusteringAtZoom: 16,
+    animate: false,
+    removeOutsideVisibleBounds: true,
+    chunkedLoading: true,
+    chunkInterval: 120,
+    chunkDelay: 25
   }).addTo(map);
 
   const markerIcon = L.divIcon({
@@ -917,8 +933,43 @@
     popupAnchor: [0, -25]
   });
 
+  function refreshMapSize(fitAfter = false) {
+    requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false, debounceMoveend: true });
+      requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false, debounceMoveend: true });
+        if (fitAfter && visibleProjects.length) fitVisible();
+      });
+    });
+  }
+
   map.whenReady(() => {
-    setTimeout(() => map.invalidateSize(true), 120);
+    refreshMapSize(false);
+    setTimeout(() => refreshMapSize(false), 150);
+    setTimeout(() => refreshMapSize(false), 500);
+  });
+
+  // Detecta cualquier cambio real en el tamaño del contenedor
+  // (fuentes, encabezado, resolución, panel lateral, etc.).
+  const mapWrap = document.querySelector(".map-wrap");
+  if ("ResizeObserver" in window && mapWrap) {
+    let resizeTimer = null;
+    const mapResizeObserver = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => refreshMapSize(false), 40);
+    });
+    mapResizeObserver.observe(mapWrap);
+  }
+
+  window.addEventListener("load", () => {
+    refreshMapSize(true);
+    setTimeout(() => refreshMapSize(true), 350);
+  });
+
+  map.on("zoomend moveend", () => {
+    // Refresco ligero: evita zonas grises si el navegador cambió el viewport
+    // durante la animación.
+    map.invalidateSize({ pan: false, debounceMoveend: true });
   });
 
   // ============================================================
@@ -1360,7 +1411,9 @@
       allProjects = buildProjects(rows);
 
       renderFilters();
-      applyFilters({fit:true});
+      refreshMapSize(false);
+      setTimeout(() => applyFilters({fit:true}), 180);
+      setTimeout(() => refreshMapSize(false), 500);
 
       setStatus(
         "ok",
@@ -1500,7 +1553,11 @@
   $("refreshBtn").addEventListener("click", loadData);
 
   // Ajuste de Leaflet después de cambios de tamaño.
-  window.addEventListener("resize", () => setTimeout(() => map.invalidateSize(), 100));
+  let windowResizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(windowResizeTimer);
+    windowResizeTimer = setTimeout(() => refreshMapSize(false), 90);
+  });
 
   // Si se abre como archivo local, OpenStreetMap puede bloquear las teselas
   // porque el navegador no envía un Referer HTTP. El paquete incluye un
