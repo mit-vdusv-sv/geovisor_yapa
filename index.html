@@ -1150,6 +1150,16 @@
     });
   }
 
+  map.on("zoomend", () => {
+    requestAnimationFrame(separateIdenticalCoordinateMarkers);
+  });
+
+  map.on("moveend", () => {
+    if (map.getZoom() >= DUPLICATE_OFFSET_ZOOM) {
+      requestAnimationFrame(separateIdenticalCoordinateMarkers);
+    }
+  });
+
   map.on("popupopen", (event) => {
     const popupElement = event.popup.getElement();
     if (!popupElement) return;
@@ -1570,6 +1580,76 @@
     }
   }
 
+  const DUPLICATE_OFFSET_ZOOM = 16;
+
+  function separateIdenticalCoordinateMarkers() {
+    if (!visibleProjects.length || !markerByRegister.size) return;
+
+    const groups = new Map();
+
+    visibleProjects.forEach(p => {
+      // Se agrupan únicamente coordenadas realmente iguales al nivel
+      // de precisión utilizado por el geovisor.
+      const coordKey = `${Number(p.lat).toFixed(6)},${Number(p.lng).toFixed(6)}`;
+
+      if (!groups.has(coordKey)) groups.set(coordKey, []);
+      groups.get(coordKey).push(p);
+    });
+
+    const closeZoom = map.getZoom() >= DUPLICATE_OFFSET_ZOOM;
+
+    groups.forEach(projects => {
+      const count = projects.length;
+
+      projects.forEach((p, index) => {
+        const marker = markerByRegister.get(p.key);
+        if (!marker) return;
+
+        const trueLatLng = L.latLng(p.lat, p.lng);
+
+        // A niveles alejados se conserva exactamente la coordenada original
+        // para que MarkerCluster trabaje normalmente.
+        if (!closeZoom || count === 1) {
+          marker.setLatLng(trueLatLng);
+          return;
+        }
+
+        // Separación visual constante en pantalla.
+        // El radio crece ligeramente según el número de puntos coincidentes,
+        // garantizando que los iconos no se oculten entre sí.
+        const minimumChordPx = 32;
+        const radiusPx = Math.min(
+          42,
+          Math.max(
+            18,
+            (minimumChordPx / (2 * Math.sin(Math.PI / count))) + 3
+          )
+        );
+
+        // Para dos puntos: izquierda / derecha.
+        // Para tres o más: distribución uniforme alrededor del punto real.
+        const startAngle = count === 2 ? Math.PI : -Math.PI / 2;
+        const angle = count === 2
+          ? (index === 0 ? Math.PI : 0)
+          : startAngle + (index * 2 * Math.PI / count);
+
+        const centerPx = map.latLngToLayerPoint(trueLatLng);
+        const displayPx = L.point(
+          centerPx.x + Math.cos(angle) * radiusPx,
+          centerPx.y + Math.sin(angle) * radiusPx
+        );
+
+        marker.setLatLng(map.layerPointToLatLng(displayPx));
+      });
+    });
+
+    // Si se vuelve a un zoom donde hay clustering, refrescar la agrupación
+    // para que los marcadores retornen correctamente al mismo cluster.
+    if (!closeZoom && typeof markerCluster.refreshClusters === "function") {
+      markerCluster.refreshClusters();
+    }
+  }
+
   function renderMarkers() {
     markerCluster.clearLayers();
     markerByRegister = new Map();
@@ -1593,6 +1673,10 @@
     });
 
     markerCluster.addLayers(markers);
+
+    // Después de que Leaflet inserte los marcadores, separar visualmente
+    // aquellos que compartan coordenada cuando corresponda.
+    requestAnimationFrame(separateIdenticalCoordinateMarkers);
   }
 
   function renderProjectList() {
