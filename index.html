@@ -877,6 +877,81 @@
     return [...counts.entries()].sort((a,b) => b[1] - a[1])[0][0];
   };
 
+  const normalizeProjectName = (value) => String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+
+  // Solo se consideran sufijos que normalmente identifican una subdivisión
+  // del mismo proyecto. No se agrupa simplemente por compartir palabras
+  // iniciales como "CONDOMINIO".
+  const VARIANT_SUFFIX_RE =
+    /(?:\s+|[-–—,:;\/])+(?:(?:CAM|CONJ|CONJUNTO)\s+)?(?:MZ|MZA|MANZANA|LT|LOTE|SL|SOLAR|BLOQUE|BLQ|ETAPA|FASE|TORRE|SECTOR|MODULO|MÓDULO|UNIDAD|CASA|VILLA)\b/i;
+
+  const suffixLooksLikeVariant = (suffix) => {
+    const t = String(suffix ?? "").trim();
+    if (!t) return false;
+
+    return /^(?:(?:CAM|CONJ|CONJUNTO)\s+)?(?:MZ|MZA|MANZANA|LT|LOTE|SL|SOLAR|BLOQUE|BLQ|ETAPA|FASE|TORRE|SECTOR|MODULO|MÓDULO|UNIDAD)\b/i.test(t)
+      || /^(?:[-–—,:;\/]?\s*)?\d+(?:\s*[-–—\/]\s*\d+)*(?:\s+[A-Z])?$/i.test(t);
+  };
+
+  const canonicalProjectName = (projectName, exactProjectNames) => {
+    const original = String(projectName ?? "").trim();
+    const normalized = normalizeProjectName(original);
+    if (!normalized) return original;
+
+    // A) Caso más seguro: existe un nombre de proyecto exacto más corto
+    // que es el prefijo del nombre largo, y lo restante parece una variante.
+    // Ej.: "DURAN CITY" + "CAM MZ 12 SL 2" => "DURAN CITY".
+    const candidates = exactProjectNames
+      .map(name => ({
+        original: name,
+        normalized: normalizeProjectName(name)
+      }))
+      .filter(x =>
+        x.normalized &&
+        x.normalized !== normalized &&
+        normalized.startsWith(x.normalized + " ")
+      )
+      .sort((a,b) => b.normalized.length - a.normalized.length);
+
+    for (const candidate of candidates) {
+      const suffix = normalized.slice(candidate.normalized.length).trim();
+
+      if (
+        suffixLooksLikeVariant(suffix) ||
+        /^(?:CAM|CONJ|CONJUNTO)\s+(?:MZ|MZA|MANZANA|LT|LOTE|SL|SOLAR|BLOQUE|BLQ|ETAPA|FASE|TORRE|SECTOR|MODULO|UNIDAD)\b/i.test(suffix)
+      ) {
+        return candidate.original;
+      }
+    }
+
+    // B) Si no existe el nombre corto como registro independiente, se
+    // elimina solamente un sufijo territorial/constructivo reconocido.
+    // Requiere que el nombre principal tenga al menos dos palabras.
+    const marker = normalized.search(VARIANT_SUFFIX_RE);
+    if (marker > 0) {
+      let root = original.slice(0, marker).trim().replace(/[-–—,:;\/\s]+$/g, "");
+
+      // "DURAN CITY CAM MZ..." -> al cortar en MZ puede quedar "DURAN CITY CAM".
+      root = root.replace(/\s+(?:CAM|CONJ|CONJUNTO)$/i, "").trim();
+
+      if (root.split(/\s+/).filter(Boolean).length >= 2) {
+        return root;
+      }
+    }
+
+    // Sin descriptor de variante: se conserva el nombre completo.
+    // Por ejemplo:
+    // "CONDOMINIO BALCONES DEL RIO" y "CONDOMINIO LOMA GRANDE"
+    // permanecen como proyectos distintos.
+    return original;
+  };
+
+
   const keyByAliases = (row, aliases) => {
     const keys = Object.keys(row);
     const normalizedKeys = keys.map(k => [k, normalizeHeader(k)]);
@@ -1054,23 +1129,22 @@
         && verified === VERIFIED_COORDINATE;
     });
 
-    // 2) Agrupación por NOMBRE EXACTO DEL PROYECTO.
-    //    Si el mismo nombre aparece con distintos Nros. de Registro,
-    //    se presenta como un solo proyecto y se suman sus viviendas.
-    const groups = new Map();
+    // 2) PRIMER NIVEL: agrupación por nombre EXACTO.
+    // Esta es la misma lógica de la versión anterior y conserva el total
+    // de viviendas que ya estaba correcto.
+    const exactGroups = new Map();
 
     eligible.forEach(row => {
       const projectName = String(get(row, F.proyecto) ?? "").trim();
       if (!projectName) return;
 
-      if (!groups.has(projectName)) groups.set(projectName, []);
-      groups.get(projectName).push(row);
+      if (!exactGroups.has(projectName)) exactGroups.set(projectName, []);
+      exactGroups.get(projectName).push(row);
     });
 
-    const projects = [];
+    const exactProjects = [];
 
-    groups.forEach((groupRows, projectName) => {
-      // Coordenada representativa: se utiliza la coordenada válida más repetida.
+    exactGroups.forEach((groupRows, projectName) => {
       const coordCounts = new Map();
 
       groupRows.forEach(row => {
@@ -1103,15 +1177,12 @@
           .filter(Boolean)
       );
 
-      // Viviendas: suma directa de la columna Nro. de Viviendas.
       const housingValues = groupRows
         .map(r => parseHousingCount(get(r, F.viviendas)))
         .filter(Number.isFinite);
 
       const totalHousing = housingValues.reduce((sum, n) => sum + n, 0);
 
-      // Precio promedio del proyecto:
-      // se pondera por el Nro. de Viviendas de cada fila cuando ambos datos existen.
       let weightedPriceSum = 0;
       let weightedHousing = 0;
       const simplePrices = [];
@@ -1134,7 +1205,7 @@
         ? weightedPriceSum / weightedHousing
         : average(simplePrices);
 
-      projects.push({
+      exactProjects.push({
         key: projectName,
         project: projectName,
         registers,
@@ -1157,7 +1228,103 @@
       });
     });
 
-    return projects.sort((a,b) =>
+    // 3) SEGUNDO NIVEL: agrupar variantes del mismo proyecto.
+    // Ejemplo:
+    // DURAN CITY
+    // DURAN CITY CAM MZ 12 SL 2
+    // DURAN CITY CAM MZ 13 - 23
+    // => DURAN CITY
+    //
+    // Pero:
+    // CONDOMINIO BALCONES DEL RIO
+    // CONDOMINIO LOMA GRANDE
+    // => continúan separados.
+    const exactNames = exactProjects.map(p => p.project);
+    const familyGroups = new Map();
+
+    exactProjects.forEach(project => {
+      const canonicalName = canonicalProjectName(project.project, exactNames);
+      const canonicalKey = normalizeProjectName(canonicalName);
+
+      if (!familyGroups.has(canonicalKey)) {
+        familyGroups.set(canonicalKey, {
+          canonicalName,
+          projects: []
+        });
+      }
+
+      familyGroups.get(canonicalKey).projects.push(project);
+    });
+
+    const mergedProjects = [];
+
+    familyGroups.forEach(({ canonicalName, projects }) => {
+      const totalHousing = projects.reduce(
+        (sum, p) => sum + (Number.isFinite(p.totalHousing) ? p.totalHousing : 0),
+        0
+      );
+
+      // Precio promedio ponderado por viviendas entre los proyectos agrupados.
+      const priceProjects = projects.filter(
+        p => Number.isFinite(p.avgPrice) &&
+             Number.isFinite(p.totalHousing) &&
+             p.totalHousing > 0
+      );
+
+      const weightedPriceSum = priceProjects.reduce(
+        (sum, p) => sum + (p.avgPrice * p.totalHousing),
+        0
+      );
+
+      const weightedHousing = priceProjects.reduce(
+        (sum, p) => sum + p.totalHousing,
+        0
+      );
+
+      const avgPrice = weightedHousing > 0
+        ? weightedPriceSum / weightedHousing
+        : average(projects.map(p => p.avgPrice));
+
+      const registers = uniqueSorted(
+        projects.flatMap(p => p.registers || [])
+      );
+
+      // Cualquier coordenada de los proyectos agrupados es válida.
+      // Se prioriza la del proyecto cuyo nombre ya coincide con el nombre principal.
+      const coordinateSource =
+        projects.find(p => normalizeProjectName(p.project) === normalizeProjectName(canonicalName))
+        || projects[0];
+
+      mergedProjects.push({
+        key: canonicalName,
+        project: canonicalName,
+        registers,
+        register: registers.length === 1
+          ? registers[0]
+          : `${registers.length} registros`,
+        province: mostCommon(projects.map(p => p.province)),
+        canton: mostCommon(projects.map(p => p.canton)),
+        parish: mostCommon(projects.map(p => p.parish)),
+        sector: mostCommon(projects.map(p => p.sector)),
+        promoter: mostCommon(projects.map(p => p.promoter)),
+        phone: mostCommon(projects.map(p => p.phone)),
+        email: mostCommon(projects.map(p => p.email)),
+        totalHousing,
+        avgPrice,
+        priceObservations: projects.reduce(
+          (sum, p) => sum + (p.priceObservations || 0), 0
+        ),
+        housingRows: projects.reduce(
+          (sum, p) => sum + (p.housingRows || 0), 0
+        ),
+        mergedProjectCount: projects.length,
+        originalProjectNames: projects.map(p => p.project),
+        lng: coordinateSource.lng,
+        lat: coordinateSource.lat
+      });
+    });
+
+    return mergedProjects.sort((a,b) =>
       (a.province || "").localeCompare(b.province || "", "es") ||
       (a.canton || "").localeCompare(b.canton || "", "es") ||
       (a.project || "").localeCompare(b.project || "", "es")
@@ -1183,9 +1350,11 @@
       <div class="popup-card">
         <div class="popup-top">
           <div class="popup-kicker">${
-            p.registers.length === 1
-              ? escapeHTML(p.registers[0])
-              : escapeHTML(`${p.registers.length} Nros. de Registro agrupados`)
+            p.mergedProjectCount > 1
+              ? escapeHTML(`${p.mergedProjectCount} variantes del proyecto agrupadas`)
+              : (p.registers.length === 1
+                  ? escapeHTML(p.registers[0])
+                  : escapeHTML(`${p.registers.length} Nros. de Registro agrupados`))
           }</div>
           <div class="popup-title">${escapeHTML(safeText(p.project))}</div>
         </div>
@@ -1205,6 +1374,15 @@
             <div>
               <span class="popup-label">Nros. de Registro agrupados</span>
               <div class="popup-value">${escapeHTML(p.registers.join(" · "))}</div>
+            </div>
+          </div>` : ""}
+
+          ${p.mergedProjectCount > 1 ? `
+          <div class="popup-line">
+            <div class="popup-ico">≡</div>
+            <div>
+              <span class="popup-label">Variantes agrupadas</span>
+              <div class="popup-value">${escapeHTML(p.originalProjectNames.join(" · "))}</div>
             </div>
           </div>` : ""}
 
@@ -1352,7 +1530,11 @@
         </div>
         <div class="reg">
           ${Math.round(p.totalHousing).toLocaleString("es-EC")} viviendas
-          ${p.registers.length > 1 ? ` · ${p.registers.length} registros agrupados` : ` · ${escapeHTML(p.registers[0] || "")}`}
+          ${p.mergedProjectCount > 1
+            ? ` · ${p.mergedProjectCount} variantes agrupadas`
+            : (p.registers.length > 1
+                ? ` · ${p.registers.length} registros agrupados`
+                : ` · ${escapeHTML(p.registers[0] || "")}`)}
         </div>
       </button>
     `).join("");
