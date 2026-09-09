@@ -13,6 +13,8 @@
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 
   <style>
     :root{
@@ -376,7 +378,7 @@
     }
 
     .map-wrap{position:relative;min-width:0;min-height:0}
-    #map{position:absolute;inset:0;width:100%;height:100%;background:#EAEAF2}
+    #map{width:100%;height:100%;min-height:100%;background:#EAEAF2}
 
     .map-legend{
       position:absolute;
@@ -510,6 +512,19 @@
       left:6.5px;top:6.5px;
     }
 
+    .marker-cluster-small div,
+    .marker-cluster-medium div,
+    .marker-cluster-large div{
+      background:var(--azul)!important;
+      color:#fff!important;
+      font-family:"Montserrat",sans-serif;
+      font-weight:800;
+    }
+    .marker-cluster-small,
+    .marker-cluster-medium,
+    .marker-cluster-large{
+      background:rgba(252,195,26,.72)!important;
+    }
 
     .empty{
       text-align:center;
@@ -704,6 +719,7 @@
 
 <!-- Librerías -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <script>
@@ -864,8 +880,6 @@
   // ============================================================
   // MAPA
   // ============================================================
-  const canvasRenderer = L.canvas({ padding: 0.5 });
-
   const map = L.map("map", {
     zoomControl: false,
     minZoom: 5,
@@ -873,8 +887,8 @@
     zoomAnimation: true,
     fadeAnimation: true,
     markerZoomAnimation: false,
-    wheelDebounceTime: 30,
-    wheelPxPerZoomLevel: 85
+    wheelDebounceTime: 35,
+    wheelPxPerZoomLevel: 90
   }).setView([-1.55, -78.35], 7);
 
   L.control.zoom({ position: "topright" }).addTo(map);
@@ -886,7 +900,7 @@
       subdomains: "abc",
       maxZoom: 19,
       attribution: "&copy; OpenStreetMap contributors",
-      keepBuffer: 4
+      keepBuffer: 3
     }
   ).addTo(map);
 
@@ -896,44 +910,44 @@
     imperial: false
   }).addTo(map);
 
-  // 299 puntos se dibujan en un único lienzo Canvas.
-  // Esto hace que acercar, alejar y desplazar el mapa sea mucho más fluido
-  // que usar cientos de marcadores HTML o recalcular clusters.
-  const pointLayer = L.layerGroup().addTo(map);
+  const markerCluster = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    disableClusteringAtZoom: 16,
+    animate: false,
+    removeOutsideVisibleBounds: true,
+    chunkedLoading: true,
+    chunkInterval: 100,
+    chunkDelay: 25
+  }).addTo(map);
 
-  function createProjectMarker(p) {
-    return L.circleMarker([p.lat, p.lng], {
-      renderer: canvasRenderer,
-      radius: 7,
-      color: "#FCC31A",
-      weight: 3,
-      fillColor: "#2E2D93",
-      fillOpacity: 1,
-      opacity: 1
-    });
-  }
+  const markerIcon = L.divIcon({
+    className: "",
+    html: '<div class="custom-marker"></div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 27],
+    popupAnchor: [0, -25]
+  });
 
-  // Leaflet no siempre detecta cambios de tamaño provocados por el layout CSS
-  // o por la carga tardía de fuentes. Este observador corrige ese caso sin
-  // generar bucles de moveend/zoomend.
-  let resizeFrame = 0;
-  function syncMapSize() {
-    cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => {
+  function refreshLeaflet({ fit = false } = {}) {
+    map.invalidateSize({ animate: false, pan: false });
+
+    if (fit && visibleProjects.length) {
+      fitVisible();
+    }
+
+    // Fuerza a Leaflet a solicitar cualquier tesela que falte
+    // después de que el contenedor ya tenga su tamaño definitivo.
+    setTimeout(() => {
       map.invalidateSize({ animate: false, pan: false });
-    });
+      osm.redraw();
+    }, 120);
   }
 
-  const mapWrap = document.querySelector(".map-wrap");
-  if ("ResizeObserver" in window && mapWrap) {
-    const mapResizeObserver = new ResizeObserver(syncMapSize);
-    mapResizeObserver.observe(mapWrap);
-  }
-
-  window.addEventListener("load", () => {
-    syncMapSize();
-    setTimeout(syncMapSize, 150);
-    setTimeout(syncMapSize, 500);
+  map.whenReady(() => {
+    setTimeout(() => refreshLeaflet({ fit: false }), 150);
+    setTimeout(() => refreshLeaflet({ fit: false }), 500);
   });
 
   // ============================================================
@@ -1175,37 +1189,31 @@
     renderProjectList();
     renderStats();
 
-    if (fit) fitVisible();
+    if (fit) {
+      map.invalidateSize({ animate:false, pan:false });
+      fitVisible();
+      setTimeout(() => osm.redraw(), 120);
+    }
   }
 
   function renderMarkers() {
-    pointLayer.clearLayers();
+    markerCluster.clearLayers();
     markerByRegister = new Map();
 
-    const markers = visibleProjects.map(p => {
-      const marker = createProjectMarker(p);
-
-      marker.bindPopup(popupHTML(p), {
-        maxWidth: 320,
-        autoPan: true,
-        keepInView: true
+    visibleProjects.forEach(p => {
+      const marker = L.marker([p.lat, p.lng], {
+        icon: markerIcon,
+        title: p.project || p.register
       });
-
+      marker.bindPopup(popupHTML(p), { maxWidth: 320 });
       marker.bindTooltip(
         `${escapeHTML(p.project || p.register)}<br>` +
         `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`,
-        {
-          direction: "top",
-          offset: [0, -8],
-          opacity: 0.96
-        }
+        { direction: "top", offset: [0, -22], opacity: 0.96 }
       );
-
+      markerCluster.addLayer(marker);
       markerByRegister.set(p.register, marker);
-      return marker;
     });
-
-    markers.forEach(marker => pointLayer.addLayer(marker));
   }
 
   function renderProjectList() {
@@ -1386,14 +1394,12 @@
 
       renderFilters();
 
-      // Esperar dos frames permite que CSS, fuentes y panel lateral terminen
-      // de establecer su tamaño antes de calcular los bounds del mapa.
-      syncMapSize();
+      // Esperar a que el navegador termine de calcular el layout antes
+      // de hacer fitBounds. Esto evita zonas grises o un mapa vacío.
+      applyFilters({fit:false});
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          syncMapSize();
-          applyFilters({fit:true});
-          setTimeout(syncMapSize, 120);
+          refreshLeaflet({ fit:true });
         });
       });
 
@@ -1405,7 +1411,7 @@
       console.error(err);
       allProjects = [];
       visibleProjects = [];
-      pointLayer.clearLayers();
+      markerCluster.clearLayers();
       renderStats();
       $("projectList").innerHTML =
         `<div class="empty"><b>No se pudo procesar la hoja.</b><br>${escapeHTML(err.message)}<br><br>
@@ -1459,7 +1465,7 @@
       cleanupSheetRequest();
       allProjects = [];
       visibleProjects = [];
-      pointLayer.clearLayers();
+      markerCluster.clearLayers();
       renderStats();
 
       $("projectList").innerHTML =
@@ -1535,7 +1541,11 @@
   $("refreshBtn").addEventListener("click", loadData);
 
   // Ajuste de Leaflet después de cambios de tamaño.
-  window.addEventListener("resize", () => setTimeout(syncMapSize, 80));
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => refreshLeaflet({ fit:false }), 150);
+  });
 
   // Si se abre como archivo local, OpenStreetMap puede bloquear las teselas
   // porque el navegador no envía un Referer HTTP. El paquete incluye un
