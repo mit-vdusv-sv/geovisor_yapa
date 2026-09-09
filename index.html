@@ -43,8 +43,9 @@
 
     .app{
       height:100vh;
-      display:grid;
-      grid-template-rows:auto 1fr;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
     }
 
     .header{
@@ -165,16 +166,19 @@
     }
 
     .content{
+      flex:1 1 auto;
       min-height:0;
       display:grid;
       grid-template-columns:360px minmax(0,1fr);
       max-width:1800px;
       width:100%;
       margin:auto;
+      overflow:hidden;
     }
 
     .sidebar{
       min-height:0;
+      height:100%;
       background:#fff;
       border-right:1px solid var(--borde);
       display:flex;
@@ -329,8 +333,6 @@
     .project-card{
       width:100%;
       text-align:left;
-      content-visibility:auto;
-      contain-intrinsic-size:78px;
       border:1px solid var(--borde);
       background:#fff;
       border-radius:13px;
@@ -377,8 +379,19 @@
       text-overflow:ellipsis;
     }
 
-    .map-wrap{position:relative;min-width:0;min-height:0}
-    #map{width:100%;height:100%;min-height:100%;background:#EAEAF2}
+    .map-wrap{
+      position:relative;
+      min-width:0;
+      min-height:0;
+      height:100%;
+      overflow:hidden;
+    }
+    #map{
+      width:100%;
+      height:100%;
+      min-height:100%;
+      background:#EAEAF2;
+    }
 
     .map-legend{
       position:absolute;
@@ -589,7 +602,7 @@
 
     @media (max-width: 900px){
       body{overflow:auto}
-      .app{height:auto;min-height:100vh;display:block}
+      .app{height:auto;min-height:100vh;display:block;overflow:visible}
       .header{padding:13px 14px}
       .header-row{align-items:flex-start}
       .header-actions .status{display:none}
@@ -883,12 +896,7 @@
   const map = L.map("map", {
     zoomControl: false,
     minZoom: 5,
-    preferCanvas: true,
-    zoomAnimation: true,
-    fadeAnimation: true,
-    markerZoomAnimation: false,
-    wheelDebounceTime: 35,
-    wheelPxPerZoomLevel: 90
+    preferCanvas: true
   }).setView([-1.55, -78.35], 7);
 
   L.control.zoom({ position: "topright" }).addTo(map);
@@ -899,8 +907,7 @@
     {
       subdomains: "abc",
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
-      keepBuffer: 3
+      attribution: "&copy; OpenStreetMap contributors"
     }
   ).addTo(map);
 
@@ -916,10 +923,7 @@
     spiderfyOnMaxZoom: true,
     disableClusteringAtZoom: 16,
     animate: false,
-    removeOutsideVisibleBounds: true,
-    chunkedLoading: true,
-    chunkInterval: 100,
-    chunkDelay: 25
+    removeOutsideVisibleBounds: true
   }).addTo(map);
 
   const markerIcon = L.divIcon({
@@ -930,25 +934,35 @@
     popupAnchor: [0, -25]
   });
 
-  function refreshLeaflet({ fit = false } = {}) {
-    map.invalidateSize({ animate: false, pan: false });
+  let layoutTimer = null;
+
+  function syncLeafletLayout({ fit = false } = {}) {
+    clearTimeout(layoutTimer);
+
+    // Primer ajuste inmediato.
+    map.invalidateSize({ animate:false, pan:false });
 
     if (fit && visibleProjects.length) {
       fitVisible();
     }
 
-    // Fuerza a Leaflet a solicitar cualquier tesela que falte
-    // después de que el contenedor ya tenga su tamaño definitivo.
-    setTimeout(() => {
-      map.invalidateSize({ animate: false, pan: false });
+    // Segundo ajuste cuando el navegador ya terminó el layout y las teselas
+    // conocen el tamaño definitivo del contenedor.
+    layoutTimer = setTimeout(() => {
+      map.invalidateSize({ animate:false, pan:false });
       osm.redraw();
     }, 120);
   }
 
   map.whenReady(() => {
-    setTimeout(() => refreshLeaflet({ fit: false }), 150);
-    setTimeout(() => refreshLeaflet({ fit: false }), 500);
+    syncLeafletLayout({ fit:false });
   });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      syncLeafletLayout({ fit:false });
+    });
+  }
 
   // ============================================================
   // ESTADO DE LA APP
@@ -1190,9 +1204,7 @@
     renderStats();
 
     if (fit) {
-      map.invalidateSize({ animate:false, pan:false });
-      fitVisible();
-      setTimeout(() => osm.redraw(), 120);
+      syncLeafletLayout({ fit:true });
     }
   }
 
@@ -1200,20 +1212,24 @@
     markerCluster.clearLayers();
     markerByRegister = new Map();
 
-    visibleProjects.forEach(p => {
+    const markers = visibleProjects.map(p => {
       const marker = L.marker([p.lat, p.lng], {
         icon: markerIcon,
         title: p.project || p.register
       });
+
       marker.bindPopup(popupHTML(p), { maxWidth: 320 });
       marker.bindTooltip(
         `${escapeHTML(p.project || p.register)}<br>` +
         `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`,
         { direction: "top", offset: [0, -22], opacity: 0.96 }
       );
-      markerCluster.addLayer(marker);
+
       markerByRegister.set(p.register, marker);
+      return marker;
     });
+
+    markerCluster.addLayers(markers);
   }
 
   function renderProjectList() {
@@ -1263,7 +1279,7 @@
 
   function fitVisible() {
     if (!visibleProjects.length) {
-      map.setView([-1.55,-78.35], 7);
+      map.setView([-1.55,-78.35], 7, { animate:false });
       return;
     }
     if (visibleProjects.length === 1) {
@@ -1393,13 +1409,11 @@
       allProjects = buildProjects(rows);
 
       renderFilters();
-
-      // Esperar a que el navegador termine de calcular el layout antes
-      // de hacer fitBounds. Esto evita zonas grises o un mapa vacío.
       applyFilters({fit:false});
+
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          refreshLeaflet({ fit:true });
+          syncLeafletLayout({ fit:true });
         });
       });
 
@@ -1544,7 +1558,9 @@
   let resizeTimer = null;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => refreshLeaflet({ fit:false }), 150);
+    resizeTimer = setTimeout(() => {
+      syncLeafletLayout({ fit:false });
+    }, 120);
   });
 
   // Si se abre como archivo local, OpenStreetMap puede bloquear las teselas
