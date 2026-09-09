@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#2E2D93" />
-  <title>GEOVISOR PROYECTOS CALIFICADOS - YAPA PA' TU CASA</title>
+  <title>PROYECTOS CALIFICADOS - YAPA PA TU CASA</title>
 
   <!-- Tipografías -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -703,8 +703,8 @@
           <div class="label">Provincias</div>
         </div>
         <div class="stat">
-          <div class="value" id="statCanton">—</div>
-          <div class="label">Cantones</div>
+          <div class="value" id="statHousing">—</div>
+          <div class="label">Viviendas</div>
         </div>
       </section>
 
@@ -726,8 +726,8 @@
         Al publicarlo en GitHub Pages o en el servidor institucional funcionará normalmente.
       </div>
       <div class="map-legend">
-        <div class="legend-row"><span class="legend-dot"></span><span>Un punto = un Nro. de Registro</span></div>
-        <div>Se muestran únicamente registros que cumplen los filtros de elegibilidad definidos.</div>
+        <div class="legend-row"><span class="legend-dot"></span><span>Un punto = un proyecto</span></div>
+        <div>Los proyectos con el mismo nombre se agrupan; sus viviendas se suman.</div>
       </div>
       <div class="loading-cover" id="loadingCover">
         <div class="loading-box"><span class="spinner"></span> Cargando información…</div>
@@ -800,6 +800,25 @@
     if (s.includes(",") && !s.includes(".")) s = s.replace(",", ".");
     s = s.replace(/[^\d.-]/g, "");
     const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  };
+
+  const parseHousingCount = (value) => {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : NaN;
+    }
+
+    let text = String(value ?? "").trim();
+    if (!text) return NaN;
+
+    // Nro. de Viviendas es una cantidad; se eliminan separadores de miles.
+    text = text
+      .replace(/\s/g, "")
+      .replace(/\./g, "")
+      .replace(/,/g, "")
+      .replace(/[^\d-]/g, "");
+
+    const n = Number(text);
     return Number.isFinite(n) ? n : NaN;
   };
 
@@ -887,6 +906,14 @@
     x: keyByAliases(row, ["X", "LONGITUD", "LONGITUDE"]),
     y: keyByAliases(row, ["Y", "LATITUD", "LATITUDE"]),
     precio: keyByAliases(row, ["PRECIO DE VENTA", "PRECIO"]),
+    viviendas: keyByAliases(row, [
+      "NRO DE VIVIENDAS",
+      "NRO. DE VIVIENDAS",
+      "NRO VIVIENDAS",
+      "NUMERO DE VIVIENDAS",
+      "NÚMERO DE VIVIENDAS",
+      "N° DE VIVIENDAS"
+    ]),
     promotor: keyByAliases(row, ["PROMOTOR/ CONSTRUCTOR", "PROMOTOR/CONSTRUCTOR", "PROMOTOR CONSTRUCTOR"]),
     telefono: keyByAliases(row, ["CONTACTO PROMOTOR/CONSTRUCTOR", "CONTACTO PROMOTOR CONSTRUCTOR", "TELEFONO", "TELÉFONO"]),
     email: keyByAliases(row, ["CONTACTO ELECTRONICO PROMOTOR/CONSTRUCTOR", "CONTACTO ELECTRÓNICO PROMOTOR/CONSTRUCTOR", "CORREO ELECTRONICO", "CORREO ELECTRÓNICO"]),
@@ -1005,7 +1032,8 @@
       ["canton", F.canton],
       ["x", F.x],
       ["y", F.y],
-      ["precio", F.precio]
+      ["precio", F.precio],
+      ["viviendas", F.viviendas]
     ];
 
     const missing = required.filter(([,key]) => !key).map(([name]) => name);
@@ -1026,29 +1054,33 @@
         && verified === VERIFIED_COORDINATE;
     });
 
-    // 2) Agrupación por Nro. de Registro => UN SOLO PUNTO POR REGISTRO.
+    // 2) Agrupación por NOMBRE EXACTO DEL PROYECTO.
+    //    Si el mismo nombre aparece con distintos Nros. de Registro,
+    //    se presenta como un solo proyecto y se suman sus viviendas.
     const groups = new Map();
+
     eligible.forEach(row => {
-      const register = String(get(row, F.registro) ?? "").trim();
-      if (!register) return;
-      if (!groups.has(register)) groups.set(register, []);
-      groups.get(register).push(row);
+      const projectName = String(get(row, F.proyecto) ?? "").trim();
+      if (!projectName) return;
+
+      if (!groups.has(projectName)) groups.set(projectName, []);
+      groups.get(projectName).push(row);
     });
 
     const projects = [];
 
-    groups.forEach((groupRows, register) => {
-      // Selección de la coordenada válida más repetida dentro del registro.
+    groups.forEach((groupRows, projectName) => {
+      // Coordenada representativa: se utiliza la coordenada válida más repetida.
       const coordCounts = new Map();
 
       groupRows.forEach(row => {
         let x = parseCoordinate(get(row, F.x));
         let y = parseCoordinate(get(row, F.y));
 
-        // Detección básica por si latitud/longitud vinieran invertidas.
         if (Number.isFinite(x) && Number.isFinite(y)) {
           const normalEcuador = x >= -92 && x <= -74 && y >= -6 && y <= 2;
           const swappedEcuador = y >= -92 && y <= -74 && x >= -6 && x <= 2;
+
           if (!normalEcuador && swappedEcuador) [x, y] = [y, x];
 
           if (x >= -92 && x <= -74 && y >= -6 && y <= 2) {
@@ -1060,14 +1092,55 @@
 
       if (!coordCounts.size) return;
 
-      const coordKey = [...coordCounts.entries()].sort((a,b) => b[1]-a[1])[0][0];
+      const coordKey = [...coordCounts.entries()]
+        .sort((a,b) => b[1] - a[1])[0][0];
+
       const [lng, lat] = coordKey.split(",").map(Number);
 
-      const prices = groupRows.map(r => parsePrice(get(r, F.precio))).filter(Number.isFinite);
+      const registers = uniqueSorted(
+        groupRows
+          .map(r => String(get(r, F.registro) ?? "").trim())
+          .filter(Boolean)
+      );
+
+      // Viviendas: suma directa de la columna Nro. de Viviendas.
+      const housingValues = groupRows
+        .map(r => parseHousingCount(get(r, F.viviendas)))
+        .filter(Number.isFinite);
+
+      const totalHousing = housingValues.reduce((sum, n) => sum + n, 0);
+
+      // Precio promedio del proyecto:
+      // se pondera por el Nro. de Viviendas de cada fila cuando ambos datos existen.
+      let weightedPriceSum = 0;
+      let weightedHousing = 0;
+      const simplePrices = [];
+
+      groupRows.forEach(row => {
+        const price = parsePrice(get(row, F.precio));
+        const units = parseHousingCount(get(row, F.viviendas));
+
+        if (Number.isFinite(price)) {
+          simplePrices.push(price);
+
+          if (Number.isFinite(units) && units > 0) {
+            weightedPriceSum += price * units;
+            weightedHousing += units;
+          }
+        }
+      });
+
+      const avgPrice = weightedHousing > 0
+        ? weightedPriceSum / weightedHousing
+        : average(simplePrices);
 
       projects.push({
-        register,
-        project: mostCommon(groupRows.map(r => get(r, F.proyecto))),
+        key: projectName,
+        project: projectName,
+        registers,
+        register: registers.length === 1
+          ? registers[0]
+          : `${registers.length} registros`,
         province: mostCommon(groupRows.map(r => get(r, F.provincia))),
         canton: mostCommon(groupRows.map(r => get(r, F.canton))),
         parish: mostCommon(groupRows.map(r => get(r, F.parroquia))),
@@ -1075,8 +1148,9 @@
         promoter: mostCommon(groupRows.map(r => get(r, F.promotor))),
         phone: mostCommon(groupRows.map(r => get(r, F.telefono))),
         email: mostCommon(groupRows.map(r => get(r, F.email))),
-        avgPrice: average(prices),
-        priceObservations: prices.length,
+        totalHousing,
+        avgPrice,
+        priceObservations: simplePrices.length,
         housingRows: groupRows.length,
         lng,
         lat
@@ -1108,11 +1182,32 @@
     return `
       <div class="popup-card">
         <div class="popup-top">
-          <div class="popup-kicker">${escapeHTML(p.register)}</div>
+          <div class="popup-kicker">${
+            p.registers.length === 1
+              ? escapeHTML(p.registers[0])
+              : escapeHTML(`${p.registers.length} Nros. de Registro agrupados`)
+          }</div>
           <div class="popup-title">${escapeHTML(safeText(p.project))}</div>
         </div>
 
         <div class="popup-body">
+          <div class="popup-line">
+            <div class="popup-ico">▦</div>
+            <div>
+              <span class="popup-label">Nro. de Viviendas</span>
+              <div class="popup-value">${Math.round(p.totalHousing).toLocaleString("es-EC")} viviendas</div>
+            </div>
+          </div>
+
+          ${p.registers.length > 1 ? `
+          <div class="popup-line">
+            <div class="popup-ico">#</div>
+            <div>
+              <span class="popup-label">Nros. de Registro agrupados</span>
+              <div class="popup-value">${escapeHTML(p.registers.join(" · "))}</div>
+            </div>
+          </div>` : ""}
+
           <div class="popup-line">
             <div class="popup-ico">⌂</div>
             <div>
@@ -1221,17 +1316,18 @@
     const markers = visibleProjects.map(p => {
       const marker = L.marker([p.lat, p.lng], {
         icon: markerIcon,
-        title: p.project || p.register
+        title: p.project
       });
 
-      marker.bindPopup(popupHTML(p), { maxWidth: 320 });
+      marker.bindPopup(popupHTML(p), { maxWidth: 340 });
       marker.bindTooltip(
-        `${escapeHTML(p.project || p.register)}<br>` +
-        `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`,
+        `${escapeHTML(p.project)}<br>` +
+        `${Math.round(p.totalHousing).toLocaleString("es-EC")} viviendas · ` +
+        `${escapeHTML(money(p.avgPrice))}`,
         { direction: "top", offset: [0, -22], opacity: 0.96 }
       );
 
-      markerByRegister.set(p.register, marker);
+      markerByRegister.set(p.key, marker);
       return marker;
     });
 
@@ -1247,23 +1343,26 @@
       return;
     }
 
-    list.innerHTML = visibleProjects.map(p => `
-      <button class="project-card" data-register="${escapeHTML(p.register)}">
+    list.innerHTML = visibleProjects.map((p, idx) => `
+      <button class="project-card" data-index="${idx}">
         <div class="project-name">${escapeHTML(safeText(p.project))}</div>
         <div class="project-meta">
           <div class="place">${escapeHTML([p.canton,p.province].filter(Boolean).join(" · "))}</div>
           <div class="price">${escapeHTML(money(p.avgPrice))}</div>
         </div>
-        <div class="reg">${escapeHTML(p.register)}</div>
+        <div class="reg">
+          ${Math.round(p.totalHousing).toLocaleString("es-EC")} viviendas
+          ${p.registers.length > 1 ? ` · ${p.registers.length} registros agrupados` : ` · ${escapeHTML(p.registers[0] || "")}`}
+        </div>
       </button>
     `).join("");
 
     list.querySelectorAll(".project-card").forEach(btn => {
       btn.addEventListener("click", () => {
-        const reg = btn.dataset.register;
-        const p = visibleProjects.find(x => x.register === reg);
-        const marker = markerByRegister.get(reg);
+        const p = visibleProjects[Number(btn.dataset.index)];
+        const marker = p ? markerByRegister.get(p.key) : null;
         if (!p || !marker) return;
+
         map.setView([p.lat,p.lng], Math.max(map.getZoom(), 15), { animate:true });
         setTimeout(() => marker.openPopup(), 300);
       });
@@ -1272,13 +1371,41 @@
 
   function renderStats() {
     $("statProjects").textContent = visibleProjects.length.toLocaleString("es-EC");
-    $("statProv").textContent = new Set(visibleProjects.map(p => p.province).filter(Boolean)).size;
-    $("statCanton").textContent = new Set(visibleProjects.map(p => p.canton).filter(Boolean)).size;
+    $("statProv").textContent = new Set(
+      visibleProjects.map(p => p.province).filter(Boolean)
+    ).size;
 
-    const p = average(visibleProjects.map(x => x.avgPrice));
+    const totalHousing = visibleProjects.reduce(
+      (sum, p) => sum + (Number.isFinite(p.totalHousing) ? p.totalHousing : 0),
+      0
+    );
+
+    $("statHousing").textContent =
+      Math.round(totalHousing).toLocaleString("es-EC");
+
+    const projectsWithPriceAndHousing = visibleProjects.filter(
+      p => Number.isFinite(p.avgPrice) && Number.isFinite(p.totalHousing) && p.totalHousing > 0
+    );
+
+    const weightedTotal = projectsWithPriceAndHousing.reduce(
+      (sum, p) => sum + (p.avgPrice * p.totalHousing),
+      0
+    );
+
+    const weightedHousing = projectsWithPriceAndHousing.reduce(
+      (sum, p) => sum + p.totalHousing,
+      0
+    );
+
+    const p = weightedHousing > 0
+      ? weightedTotal / weightedHousing
+      : average(visibleProjects.map(x => x.avgPrice));
+
     $("statPrice").textContent = Number.isFinite(p)
       ? new Intl.NumberFormat("es-EC", {
-          style:"currency", currency:"USD", maximumFractionDigits:0
+          style:"currency",
+          currency:"USD",
+          maximumFractionDigits:0
         }).format(p)
       : "—";
   }
@@ -1306,8 +1433,9 @@
     }
 
     const rows = visibleProjects.map(p => ({
-      "NRO DE REGISTRO": p.register,
+      "NRO DE REGISTRO(S)": p.registers.join(" | "),
       "NOMBRE DEL PROYECTO": p.project,
+      "NRO DE VIVIENDAS": Math.round(p.totalHousing),
       "PROVINCIA": p.province,
       "CANTON": p.canton,
       "PARROQUIA": p.parish,
@@ -1324,12 +1452,12 @@
     const province = normalize($("provinciaSelect").value || "ECUADOR").replace(/\s+/g,"_");
     const canton = normalize($("cantonSelect").value || "").replace(/\s+/g,"_");
     const suffix = [province,canton].filter(Boolean).join("_");
-    const baseName = `GEOVISOR PROYECTOS_YAPA_PA'_TU_CASA_${suffix}_${date}`;
+    const baseName = `PROYECTOS_YAPA_PA_TU_CASA_${suffix}_${date}`;
 
     if (window.XLSX) {
       const ws = XLSX.utils.json_to_sheet(rows);
       ws["!cols"] = [
-        {wch:30},{wch:38},{wch:20},{wch:20},{wch:20},{wch:24},
+        {wch:38},{wch:38},{wch:18},{wch:20},{wch:20},{wch:20},{wch:24},
         {wch:38},{wch:22},{wch:34},{wch:25},{wch:14},{wch:14}
       ];
       const wb = XLSX.utils.book_new();
