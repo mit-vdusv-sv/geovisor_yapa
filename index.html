@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#2E2D93" />
-  <title>PROYECTOS CALIFICADOS - YAPA PA TU CASA</title>
+  <title>GEOVISOR PROYECTOS CALIFICADOS - YAPA PA' TU CASA</title>
 
   <!-- Tipografías -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -121,11 +121,31 @@
       text-transform:uppercase;
     }
 
+    .header-status-group{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:5px;
+      flex:0 0 auto;
+      min-width:0;
+    }
+
     .header-actions{
       display:flex;
       align-items:center;
       gap:8px;
       flex:0 0 auto;
+    }
+
+    .availability-note{
+      max-width:360px;
+      padding-right:2px;
+      font-size:9.5px;
+      line-height:1.2;
+      font-weight:500;
+      color:rgba(255,255,255,.78);
+      text-align:right;
+      white-space:normal;
     }
 
     .status{
@@ -475,6 +495,57 @@
     }
     .popup-value{font-weight:650;color:#25293B;word-break:break-word}
     .popup-value a{color:var(--azul);text-decoration:none}
+
+    .register-first{
+      line-height:1.35;
+    }
+
+    .registers-more{
+      margin-top:4px;
+      font-size:9.5px;
+    }
+
+    .registers-more summary{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      color:var(--azul);
+      font-weight:800;
+      cursor:pointer;
+      list-style:none;
+      user-select:none;
+    }
+
+    .registers-more summary::-webkit-details-marker{display:none}
+
+    .registers-more summary::after{
+      content:"▾";
+      font-size:9px;
+      transition:transform .18s ease;
+    }
+
+    .registers-more[open] summary::after{
+      transform:rotate(180deg);
+    }
+
+    .registers-extra{
+      margin-top:6px;
+      max-height:92px;
+      overflow:auto;
+      padding:7px 8px;
+      border:1px solid var(--borde);
+      border-radius:8px;
+      background:#F8F9FC;
+      color:#4F566A;
+      font-size:9px;
+      line-height:1.35;
+    }
+
+    .registers-extra div + div{
+      margin-top:4px;
+      padding-top:4px;
+      border-top:1px solid #ECEEF4;
+    }
     .popup-price{
       margin-top:11px;
       border-radius:12px;
@@ -611,7 +682,9 @@
       .app{height:auto;min-height:100vh;display:block;overflow:visible}
       .header{padding:13px 14px}
       .header-row{align-items:flex-start}
+      .header-status-group{align-items:flex-end}
       .header-actions .status{display:none}
+      .availability-note{display:none}
       .content{display:block}
       .sidebar{border-right:0;border-bottom:1px solid var(--borde)}
       .project-list{max-height:280px}
@@ -645,17 +718,22 @@
         </div>
         <div class="titles">
           <div class="eyebrow">Ministerio de Infraestructura y Tecnología</div>
-          <h1>PROYECTOS CALIFICADOS - YAPA PA TU CASA</h1>
+          <h1>GEOVISOR PROYECTOS CALIFICADOS - YAPA PA' TU CASA</h1>
         </div>
       </div>
-      <div class="header-actions">
-        <div class="status" id="statusBox">
-          <span class="status-dot"></span>
-          <span id="statusText">Conectando con Google Sheets…</span>
+      <div class="header-status-group">
+        <div class="header-actions">
+          <div class="status" id="statusBox">
+            <span class="status-dot"></span>
+            <span id="statusText">Conectando con Google Sheets…</span>
+          </div>
+          <button class="btn btn-light" id="refreshBtn" title="Actualizar datos desde Google Sheets">
+            <span>↻</span> <b>Actualizar</b>
+          </button>
         </div>
-        <button class="btn btn-light" id="refreshBtn" title="Actualizar datos desde Google Sheets">
-          <span>↻</span> <b>Actualizar</b>
-        </button>
+        <div class="availability-note">
+          Información sujeta a disponibilidad de las viviendas de cada proyecto.
+        </div>
       </div>
     </div>
   </header>
@@ -1072,6 +1150,19 @@
     });
   }
 
+  map.on("popupopen", (event) => {
+    const popupElement = event.popup.getElement();
+    if (!popupElement) return;
+
+    popupElement.querySelectorAll(".registers-more").forEach(details => {
+      details.addEventListener("toggle", () => {
+        requestAnimationFrame(() => {
+          event.popup.update();
+        });
+      });
+    });
+  });
+
   // ============================================================
   // ESTADO DE LA APP
   // ============================================================
@@ -1349,13 +1440,7 @@
     return `
       <div class="popup-card">
         <div class="popup-top">
-          <div class="popup-kicker">${
-            p.mergedProjectCount > 1
-              ? escapeHTML(`${p.mergedProjectCount} variantes del proyecto agrupadas`)
-              : (p.registers.length === 1
-                  ? escapeHTML(p.registers[0])
-                  : escapeHTML(`${p.registers.length} Nros. de Registro agrupados`))
-          }</div>
+          <div class="popup-kicker">PROYECTO CALIFICADO</div>
           <div class="popup-title">${escapeHTML(safeText(p.project))}</div>
         </div>
 
@@ -1368,23 +1453,21 @@
             </div>
           </div>
 
-          ${p.registers.length > 1 ? `
           <div class="popup-line">
             <div class="popup-ico">#</div>
             <div>
-              <span class="popup-label">Nros. de Registro agrupados</span>
-              <div class="popup-value">${escapeHTML(p.registers.join(" · "))}</div>
+              <span class="popup-label">${p.registers.length > 1 ? "Nros. de Registro" : "Nro. de Registro"}</span>
+              <div class="popup-value register-first">${escapeHTML(p.registers[0] || "No disponible")}</div>
+              ${p.registers.length > 1 ? `
+                <details class="registers-more">
+                  <summary>Ver más (${p.registers.length - 1})</summary>
+                  <div class="registers-extra">
+                    ${p.registers.slice(1).map(reg => `<div>${escapeHTML(reg)}</div>`).join("")}
+                  </div>
+                </details>
+              ` : ""}
             </div>
-          </div>` : ""}
-
-          ${p.mergedProjectCount > 1 ? `
-          <div class="popup-line">
-            <div class="popup-ico">≡</div>
-            <div>
-              <span class="popup-label">Variantes agrupadas</span>
-              <div class="popup-value">${escapeHTML(p.originalProjectNames.join(" · "))}</div>
-            </div>
-          </div>` : ""}
+          </div>
 
           <div class="popup-line">
             <div class="popup-ico">⌂</div>
