@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2E2D93" />
+  <title>PROYECTOS CALIFICADOS - YAPA PA TU CASA</title>
+
+  <!-- Tipografías -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
+  <style>
+    :root{
+      --azul:#2E2D93;
+      --azul-oscuro:#232173;
+      --amarillo:#FCC31A;
+      --rojo:#E41937;
+      --blanco:#FFFFFF;
+      --fondo:#F5F6FA;
+      --texto:#202435;
+      --gris:#687084;
+      --borde:#E3E6EF;
+      --verde:#159A65;
+      --sombra:0 12px 30px rgba(34,33,115,.12);
+      --radio:18px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      font-family:"Montserrat",Arial,sans-serif;
+      color:var(--texto);
+      background:var(--fondo);
+      overflow:hidden;
+    }
+
+    .app{
+      height:100vh;
+      display:grid;
+      grid-template-rows:auto 1fr;
+    }
+
+    .header{
+      position:relative;
+      z-index:1001;
+      background:linear-gradient(115deg,var(--azul) 0%,#3432A4 62%,var(--azul-oscuro) 100%);
+      color:#fff;
+      padding:16px 22px 15px;
+      box-shadow:0 5px 20px rgba(26,25,89,.22);
+      overflow:hidden;
+    }
+
+    .header::after{
+      content:"";
+      position:absolute;
+      inset:auto -65px -90px auto;
+      width:280px;height:190px;
+      border-radius:50%;
+      background:rgba(255,255,255,.05);
+      pointer-events:none;
+    }
+
+    .header-row{
+      position:relative;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      max-width:1800px;
+      margin:auto;
+    }
+
+    .brand-wrap{
+      display:flex;
+      align-items:center;
+      min-width:0;
+      gap:16px;
+    }
+
+    .slashes{
+      display:flex;
+      gap:5px;
+      transform:skew(-16deg);
+      flex:0 0 auto;
+    }
+    .slash{width:8px;height:41px;border-radius:2px}
+    .slash.y{background:var(--amarillo)}
+    .slash.b{background:#fff}
+    .slash.r{background:var(--rojo)}
+
+    .titles{min-width:0}
+    .eyebrow{
+      font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+      font-size:15px;
+      font-weight:600;
+      letter-spacing:.9px;
+      text-transform:uppercase;
+      opacity:.9;
+      margin-bottom:2px;
+    }
+    h1{
+      font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+      font-size:clamp(25px,2.5vw,39px);
+      line-height:.96;
+      letter-spacing:.4px;
+      margin:0;
+      font-weight:800;
+      text-transform:uppercase;
+    }
+
+    .header-actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex:0 0 auto;
+    }
+
+    .status{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      background:rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:999px;
+      padding:9px 12px;
+      font-size:11px;
+      white-space:nowrap;
+      max-width:245px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      backdrop-filter:blur(7px);
+    }
+    .status-dot{
+      width:9px;height:9px;border-radius:50%;
+      background:#9BA1B5;
+      box-shadow:0 0 0 3px rgba(255,255,255,.08);
+    }
+    .status.ok .status-dot{background:#3CE5A3}
+    .status.error .status-dot{background:#FF7D8D}
+
+    .btn{
+      border:0;
+      border-radius:11px;
+      padding:10px 12px;
+      font:600 12px "Montserrat",sans-serif;
+      cursor:pointer;
+      transition:.2s ease;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+    }
+    .btn:hover{transform:translateY(-1px)}
+    .btn-light{
+      color:var(--azul);
+      background:#fff;
+      box-shadow:0 5px 13px rgba(0,0,0,.1);
+    }
+
+    .content{
+      min-height:0;
+      display:grid;
+      grid-template-columns:360px minmax(0,1fr);
+      max-width:1800px;
+      width:100%;
+      margin:auto;
+    }
+
+    .sidebar{
+      min-height:0;
+      background:#fff;
+      border-right:1px solid var(--borde);
+      display:flex;
+      flex-direction:column;
+      position:relative;
+      z-index:900;
+    }
+
+    .filters{
+      padding:15px 15px 12px;
+      border-bottom:1px solid var(--borde);
+      background:#fff;
+    }
+
+    .filter-title{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .filter-title strong{
+      font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+      font-size:19px;
+      color:var(--azul);
+      letter-spacing:.25px;
+    }
+    .mini-link{
+      border:0;background:transparent;
+      color:var(--azul);
+      font-weight:700;
+      font-size:11px;
+      cursor:pointer;
+      padding:4px;
+    }
+
+    .filter-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:9px;
+    }
+    .field label{
+      display:block;
+      font-size:10px;
+      font-weight:700;
+      letter-spacing:.35px;
+      color:var(--gris);
+      text-transform:uppercase;
+      margin:0 0 5px 2px;
+    }
+
+    select{
+      width:100%;
+      border:1px solid var(--borde);
+      border-radius:11px;
+      background:#fff;
+      color:var(--texto);
+      padding:10px 30px 10px 10px;
+      outline:none;
+      font:600 11px "Montserrat",sans-serif;
+    }
+    select:focus{
+      border-color:rgba(46,45,147,.55);
+      box-shadow:0 0 0 3px rgba(46,45,147,.08);
+    }
+
+    .download-row{
+      display:grid;
+      grid-template-columns:1fr auto;
+      gap:8px;
+      margin-top:10px;
+    }
+    .btn-primary{
+      background:var(--azul);
+      color:#fff;
+    }
+    .btn-icon{
+      width:40px;
+      background:#F0F1F7;
+      color:var(--azul);
+      padding:0;
+    }
+
+    .stats{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      padding:11px 15px;
+      border-bottom:1px solid var(--borde);
+      background:#FAFAFD;
+    }
+    .stat{
+      background:#fff;
+      border:1px solid var(--borde);
+      border-radius:12px;
+      padding:9px 10px;
+      min-width:0;
+    }
+    .stat .value{
+      font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+      font-weight:800;
+      color:var(--azul);
+      font-size:25px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .stat .label{
+      color:var(--gris);
+      font-size:9px;
+      margin-top:4px;
+      text-transform:uppercase;
+      font-weight:700;
+      letter-spacing:.25px;
+    }
+
+    .list-head{
+      padding:11px 15px 8px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .list-head strong{
+      font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+      font-size:18px;
+      color:var(--texto);
+    }
+    .count-badge{
+      min-width:28px;
+      height:22px;
+      border-radius:999px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0 8px;
+      background:rgba(252,195,26,.18);
+      color:#846100;
+      font-size:10px;
+      font-weight:800;
+    }
+
+    .project-list{
+      overflow:auto;
+      min-height:0;
+      padding:0 10px 14px 15px;
+    }
+    .project-list::-webkit-scrollbar{width:7px}
+    .project-list::-webkit-scrollbar-thumb{background:#D7DAE5;border-radius:10px}
+
+    .project-card{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--borde);
+      background:#fff;
+      border-radius:13px;
+      padding:11px 12px;
+      margin-bottom:8px;
+      cursor:pointer;
+      transition:.18s ease;
+    }
+    .project-card:hover{
+      border-color:rgba(46,45,147,.32);
+      transform:translateY(-1px);
+      box-shadow:0 5px 16px rgba(36,35,113,.08);
+    }
+    .project-name{
+      font-weight:800;
+      font-size:11px;
+      line-height:1.35;
+      color:#24283A;
+      margin-bottom:5px;
+    }
+    .project-meta{
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      align-items:flex-end;
+    }
+    .place{
+      color:var(--gris);
+      font-size:9.5px;
+      line-height:1.35;
+    }
+    .price{
+      flex:0 0 auto;
+      color:var(--azul);
+      font-weight:800;
+      font-size:11px;
+    }
+    .reg{
+      color:#8B91A2;
+      font-size:8.5px;
+      margin-top:5px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .map-wrap{position:relative;min-width:0;min-height:0}
+    #map{width:100%;height:100%;background:#EAEAF2}
+
+    .map-legend{
+      position:absolute;
+      z-index:700;
+      right:14px;
+      bottom:26px;
+      background:rgba(255,255,255,.96);
+      border:1px solid var(--borde);
+      box-shadow:var(--sombra);
+      border-radius:13px;
+      padding:9px 11px;
+      font-size:9.5px;
+      color:var(--gris);
+      max-width:230px;
+    }
+    .legend-row{display:flex;align-items:center;gap:7px;margin:3px 0}
+    .legend-dot{
+      width:12px;height:12px;border-radius:50%;
+      background:var(--azul);
+      border:3px solid var(--amarillo);
+      flex:0 0 auto;
+    }
+
+    .leaflet-popup-content-wrapper{
+      border-radius:16px;
+      box-shadow:0 14px 38px rgba(26,25,89,.25);
+      padding:0;
+      overflow:hidden;
+    }
+    .leaflet-popup-content{margin:0;width:310px!important}
+    .leaflet-popup-tip{box-shadow:none}
+
+    .popup-card{font-family:"Montserrat",Arial,sans-serif}
+    .popup-top{
+      background:linear-gradient(115deg,var(--azul),#3B38AC);
+      color:#fff;
+      padding:15px 16px 12px;
+      border-bottom:4px solid var(--amarillo);
+    }
+    .popup-kicker{
+      font:700 10px "Barlow Condensed",Arial Narrow,sans-serif;
+      opacity:.8;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+    }
+    .popup-title{
+      margin-top:3px;
+      font:800 20px/1.05 "Barlow Condensed",Arial Narrow,sans-serif;
+      text-transform:uppercase;
+    }
+    .popup-body{padding:13px 16px 15px}
+    .popup-line{
+      display:grid;
+      grid-template-columns:22px 1fr;
+      gap:8px;
+      align-items:start;
+      margin:8px 0;
+      font-size:10.5px;
+      line-height:1.4;
+    }
+    .popup-ico{
+      width:22px;height:22px;border-radius:7px;
+      background:#F0F1F7;
+      color:var(--azul);
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;
+    }
+    .popup-label{
+      color:#7C8294;
+      font-size:8.5px;
+      text-transform:uppercase;
+      font-weight:700;
+      letter-spacing:.25px;
+      display:block;
+      margin-bottom:1px;
+    }
+    .popup-value{font-weight:650;color:#25293B;word-break:break-word}
+    .popup-value a{color:var(--azul);text-decoration:none}
+    .popup-price{
+      margin-top:11px;
+      border-radius:12px;
+      background:linear-gradient(90deg,rgba(252,195,26,.16),rgba(252,195,26,.07));
+      padding:10px 11px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+    }
+    .popup-price span{
+      font-size:9px;
+      color:#7C6A22;
+      text-transform:uppercase;
+      font-weight:800;
+    }
+    .popup-price strong{
+      color:var(--azul);
+      font-size:18px;
+      font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    }
+    .apply-btn{
+      margin-top:11px;
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      text-decoration:none;
+      padding:11px 12px;
+      border-radius:11px;
+      background:var(--rojo);
+      color:#fff!important;
+      font-weight:800;
+      font-size:11px;
+      box-shadow:0 6px 15px rgba(228,25,55,.2);
+    }
+
+    .custom-marker{
+      width:28px;height:28px;
+      border-radius:50% 50% 50% 8px;
+      background:var(--azul);
+      border:4px solid var(--amarillo);
+      transform:rotate(-45deg);
+      box-shadow:0 4px 12px rgba(34,33,115,.3);
+    }
+    .custom-marker::after{
+      content:"";
+      position:absolute;
+      width:7px;height:7px;
+      border-radius:50%;
+      background:#fff;
+      left:6.5px;top:6.5px;
+    }
+
+    .marker-cluster-small div,
+    .marker-cluster-medium div,
+    .marker-cluster-large div{
+      background:var(--azul)!important;
+      color:#fff!important;
+      font-family:"Montserrat",sans-serif;
+      font-weight:800;
+    }
+    .marker-cluster-small,
+    .marker-cluster-medium,
+    .marker-cluster-large{
+      background:rgba(252,195,26,.72)!important;
+    }
+
+    .empty{
+      text-align:center;
+      color:var(--gris);
+      font-size:11px;
+      padding:25px 12px;
+      line-height:1.5;
+    }
+
+
+    .local-warning{
+      position:absolute;
+      z-index:1200;
+      left:50%;
+      top:112px;
+      transform:translateX(-50%);
+      max-width:min(720px,calc(100% - 30px));
+      padding:11px 16px;
+      border-radius:12px;
+      background:#fff4cf;
+      border:1px solid #f0cf63;
+      color:#5e4a00;
+      box-shadow:0 8px 24px rgba(0,0,0,.14);
+      font-size:11px;
+      line-height:1.45;
+      font-weight:600;
+      display:none;
+    }
+    .local-warning b{color:#332600}
+
+    .loading-cover{
+      position:absolute;
+      inset:0;
+      z-index:800;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(245,246,250,.78);
+      backdrop-filter:blur(2px);
+    }
+    .loading-box{
+      background:#fff;
+      border:1px solid var(--borde);
+      border-radius:16px;
+      box-shadow:var(--sombra);
+      padding:17px 20px;
+      display:flex;
+      align-items:center;
+      gap:11px;
+      color:var(--azul);
+      font-size:12px;
+      font-weight:700;
+    }
+    .spinner{
+      width:20px;height:20px;
+      border-radius:50%;
+      border:3px solid #E7E8F0;
+      border-top-color:var(--azul);
+      animation:spin .75s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (max-width: 900px){
+      body{overflow:auto}
+      .app{height:auto;min-height:100vh;display:block}
+      .header{padding:13px 14px}
+      .header-row{align-items:flex-start}
+      .header-actions .status{display:none}
+      .content{display:block}
+      .sidebar{border-right:0;border-bottom:1px solid var(--borde)}
+      .project-list{max-height:280px}
+      .map-wrap{height:68vh;min-height:510px}
+      .filter-grid{grid-template-columns:1fr 1fr}
+    }
+
+    @media (max-width: 560px){
+      .slash{height:34px;width:7px}
+      .brand-wrap{gap:11px}
+      .eyebrow{font-size:12px}
+      h1{font-size:25px}
+      .header-actions .btn-light{padding:9px 10px;font-size:0}
+      .header-actions .btn-light span{font-size:16px}
+      .filter-grid{grid-template-columns:1fr}
+      .stats{grid-template-columns:1fr 1fr}
+      .leaflet-popup-content{width:270px!important}
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+  <header class="header">
+    <div class="header-row">
+      <div class="brand-wrap">
+        <div class="slashes" aria-hidden="true">
+          <div class="slash y"></div>
+          <div class="slash b"></div>
+          <div class="slash r"></div>
+        </div>
+        <div class="titles">
+          <div class="eyebrow">Ministerio de Infraestructura y Tecnología</div>
+          <h1>PROYECTOS CALIFICADOS - YAPA PA TU CASA</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status" id="statusBox">
+          <span class="status-dot"></span>
+          <span id="statusText">Conectando con Google Sheets…</span>
+        </div>
+        <button class="btn btn-light" id="refreshBtn" title="Actualizar datos desde Google Sheets">
+          <span>↻</span> <b>Actualizar</b>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <aside class="sidebar">
+      <section class="filters">
+        <div class="filter-title">
+          <strong>Filtros territoriales</strong>
+          <button class="mini-link" id="resetBtn">Limpiar filtros</button>
+        </div>
+
+        <div class="filter-grid">
+          <div class="field">
+            <label for="provinciaSelect">Provincia</label>
+            <select id="provinciaSelect">
+              <option value="">Todas las provincias</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cantonSelect">Cantón</label>
+            <select id="cantonSelect">
+              <option value="">Todos los cantones</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="download-row">
+          <button class="btn btn-primary" id="downloadBtn">⇩ Descargar lista visible</button>
+          <button class="btn btn-icon" id="fitBtn" title="Ajustar mapa a los resultados">⌖</button>
+        </div>
+      </section>
+
+      <section class="stats">
+        <div class="stat">
+          <div class="value" id="statProjects">—</div>
+          <div class="label">Proyectos visibles</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="statPrice">—</div>
+          <div class="label">Precio prom. proyectos</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="statProv">—</div>
+          <div class="label">Provincias</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="statCanton">—</div>
+          <div class="label">Cantones</div>
+        </div>
+      </section>
+
+      <div class="list-head">
+        <strong>Listado de proyectos</strong>
+        <span class="count-badge" id="listCount">0</span>
+      </div>
+
+      <div class="project-list" id="projectList">
+        <div class="empty">Cargando proyectos…</div>
+      </div>
+    </aside>
+
+    <section class="map-wrap">
+      <div id="map"></div>
+      <div class="local-warning" id="localWarning">
+        <b>Vista local:</b> este geovisor no debe abrirse con <code>file://</code>.
+        Para probar OpenStreetMap correctamente, abre <b>iniciar_geovisor.bat</b>.
+        Al publicarlo en GitHub Pages o en el servidor institucional funcionará normalmente.
+      </div>
+      <div class="map-legend">
+        <div class="legend-row"><span class="legend-dot"></span><span>Un punto = un Nro. de Registro</span></div>
+        <div>Se muestran únicamente registros que cumplen los filtros de elegibilidad definidos.</div>
+      </div>
+      <div class="loading-cover" id="loadingCover">
+        <div class="loading-box"><span class="spinner"></span> Cargando información…</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Librerías -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // CONEXIÓN A GOOGLE SHEETS
+  // ============================================================
+  const SHEET_URL =
+    "https://docs.google.com/spreadsheets/d/107ZMNZpjswuc-SBBeXvcOxGfr5bxj3c9Rk3B8zT8wN0/edit?gid=0#gid=0";
+  const SHEET_ID = "107ZMNZpjswuc-SBBeXvcOxGfr5bxj3c9Rk3B8zT8wN0";
+  const SHEET_GID = "0";
+  const SHEET_QUERY_URL =
+    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq`;
+
+  const APPLICATION_URL =
+    "https://plan-vivienda.mit.gob.ec/yapa-pa-tu-casa#registro-yapa";
+
+  // Filtros obligatorios solicitados:
+  const VALID_SEGMENTS = new Set(["SEGUNDO", "SEGUNDO TERR. PROM"]);
+  const VALID_AVAILABILITY = new Set(["SI", "POR VERIFICAR"]);
+  const VERIFIED_COORDINATE = "SI";
+
+  // ============================================================
+  // UTILIDADES
+  // ============================================================
+  const $ = (id) => document.getElementById(id);
+
+  const normalize = (value) => String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+
+  const normalizeHeader = (value) => normalize(value)
+    .replace(/[./_-]+/g, " ")
+    .replace(/[()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const escapeHTML = (value) => String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+  const safeText = (value, fallback = "No disponible") => {
+    const s = String(value ?? "").trim();
+    return s ? s : fallback;
+  };
+
+  const parseCoordinate = (value) => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+    let s = String(value ?? "").trim().replace(/\s/g, "");
+    if (!s) return NaN;
+    if (s.includes(",") && !s.includes(".")) s = s.replace(",", ".");
+    s = s.replace(/[^\d.-]/g, "");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  };
+
+  const parsePrice = (value) => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+    let s = String(value ?? "").trim();
+    if (!s) return NaN;
+    s = s.replace(/[^\d,.-]/g, "");
+    if (!s) return NaN;
+
+    const comma = s.lastIndexOf(",");
+    const dot = s.lastIndexOf(".");
+
+    if (comma >= 0 && dot >= 0) {
+      // El último separador se interpreta como decimal.
+      if (comma > dot) {
+        s = s.replace(/\./g, "").replace(",", ".");
+      } else {
+        s = s.replace(/,/g, "");
+      }
+    } else if (comma >= 0) {
+      const decimals = s.length - comma - 1;
+      s = decimals <= 2 ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    } else if (dot >= 0) {
+      const decimals = s.length - dot - 1;
+      if (decimals > 2) s = s.replace(/\./g, "");
+    }
+
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  };
+
+  const money = (value) => {
+    if (!Number.isFinite(value)) return "No disponible";
+    return new Intl.NumberFormat("es-EC", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
+  const uniqueSorted = (arr) =>
+    [...new Set(arr.filter(Boolean))].sort((a,b) => a.localeCompare(b, "es"));
+
+  const average = (arr) => {
+    const nums = arr.filter(Number.isFinite);
+    return nums.length ? nums.reduce((a,b) => a+b, 0) / nums.length : NaN;
+  };
+
+  const mostCommon = (values) => {
+    const cleaned = values.map(v => String(v ?? "").trim()).filter(Boolean);
+    if (!cleaned.length) return "";
+    const counts = new Map();
+    cleaned.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
+    return [...counts.entries()].sort((a,b) => b[1] - a[1])[0][0];
+  };
+
+  const keyByAliases = (row, aliases) => {
+    const keys = Object.keys(row);
+    const normalizedKeys = keys.map(k => [k, normalizeHeader(k)]);
+
+    for (const alias of aliases) {
+      const target = normalizeHeader(alias);
+
+      // Coincidencia exacta.
+      let found = normalizedKeys.find(([, nk]) => nk === target);
+      if (found) return found[0];
+
+      // PapaParse puede renombrar encabezados duplicados añadiendo sufijos.
+      found = normalizedKeys.find(([, nk]) => nk.startsWith(target + " "));
+      if (found) return found[0];
+    }
+    return null;
+  };
+
+  const fieldMapFromRow = (row) => ({
+    segmento: keyByAliases(row, ["SEGMENTO DESTINADO", "SEGMENTO"]),
+    disponibilidad: keyByAliases(row, ["VIVIENDAS DISPONIBLES", "VIVIENDA DISPONIBLE", "VIVIENDAS DISPONIBLE"]),
+    coordVerificada: keyByAliases(row, ["COORDENADA VERIFICADA"]),
+    registro: keyByAliases(row, ["NRO DE REGISTRO", "NRO. DE REGISTRO", "NUMERO DE REGISTRO"]),
+    proyecto: keyByAliases(row, ["NOMBRE DEL PROYECTO", "PROYECTO"]),
+    provincia: keyByAliases(row, ["PROVINCIA"]),
+    canton: keyByAliases(row, ["CANTON", "CANTÓN"]),
+    x: keyByAliases(row, ["X", "LONGITUD", "LONGITUDE"]),
+    y: keyByAliases(row, ["Y", "LATITUD", "LATITUDE"]),
+    precio: keyByAliases(row, ["PRECIO DE VENTA", "PRECIO"]),
+    promotor: keyByAliases(row, ["PROMOTOR/ CONSTRUCTOR", "PROMOTOR/CONSTRUCTOR", "PROMOTOR CONSTRUCTOR"]),
+    telefono: keyByAliases(row, ["CONTACTO PROMOTOR/CONSTRUCTOR", "CONTACTO PROMOTOR CONSTRUCTOR", "TELEFONO", "TELÉFONO"]),
+    email: keyByAliases(row, ["CONTACTO ELECTRONICO PROMOTOR/CONSTRUCTOR", "CONTACTO ELECTRÓNICO PROMOTOR/CONSTRUCTOR", "CORREO ELECTRONICO", "CORREO ELECTRÓNICO"]),
+    parroquia: keyByAliases(row, ["PARROQUIA"]),
+    sector: keyByAliases(row, ["SECTOR"])
+  });
+
+  const get = (row, key) => key ? row[key] : "";
+
+  // ============================================================
+  // MAPA
+  // ============================================================
+  const map = L.map("map", {
+    zoomControl: false,
+    minZoom: 5,
+    preferCanvas: true
+  }).setView([-1.55, -78.35], 7);
+
+  L.control.zoom({ position: "topright" }).addTo(map);
+
+  // Mapa base: OpenStreetMap oficial, como en los geovisores anteriores.
+  const osm = L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      subdomains: "abc",
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }
+  ).addTo(map);
+
+  L.control.scale({
+    position: "bottomright",
+    metric: true,
+    imperial: false
+  }).addTo(map);
+
+  const markerCluster = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 48,
+    spiderfyOnMaxZoom: true,
+    disableClusteringAtZoom: 16
+  }).addTo(map);
+
+  const markerIcon = L.divIcon({
+    className: "",
+    html: '<div class="custom-marker"></div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 27],
+    popupAnchor: [0, -25]
+  });
+
+  map.whenReady(() => {
+    setTimeout(() => map.invalidateSize(true), 120);
+  });
+
+  // ============================================================
+  // ESTADO DE LA APP
+  // ============================================================
+  let allProjects = [];
+  let visibleProjects = [];
+  let markerByRegister = new Map();
+
+  const setStatus = (type, text) => {
+    const box = $("statusBox");
+    box.classList.remove("ok","error");
+    if (type) box.classList.add(type);
+    $("statusText").textContent = text;
+  };
+
+  const showLoading = (show) => {
+    $("loadingCover").style.display = show ? "flex" : "none";
+  };
+
+  // ============================================================
+  // PROCESAMIENTO
+  // ============================================================
+  function buildProjects(rows) {
+    if (!rows.length) return [];
+    const F = fieldMapFromRow(rows[0]);
+
+    const required = [
+      ["segmento", F.segmento],
+      ["disponibilidad", F.disponibilidad],
+      ["coordVerificada", F.coordVerificada],
+      ["registro", F.registro],
+      ["proyecto", F.proyecto],
+      ["provincia", F.provincia],
+      ["canton", F.canton],
+      ["x", F.x],
+      ["y", F.y],
+      ["precio", F.precio]
+    ];
+
+    const missing = required.filter(([,key]) => !key).map(([name]) => name);
+    if (missing.length) {
+      throw new Error(
+        "No se encontraron todas las columnas necesarias. Faltan: " + missing.join(", ")
+      );
+    }
+
+    // 1) Filtros obligatorios de elegibilidad.
+    const eligible = rows.filter(row => {
+      const segment = normalize(get(row, F.segmento));
+      const availability = normalize(get(row, F.disponibilidad));
+      const verified = normalize(get(row, F.coordVerificada));
+
+      return VALID_SEGMENTS.has(segment)
+        && VALID_AVAILABILITY.has(availability)
+        && verified === VERIFIED_COORDINATE;
+    });
+
+    // 2) Agrupación por Nro. de Registro => UN SOLO PUNTO POR REGISTRO.
+    const groups = new Map();
+    eligible.forEach(row => {
+      const register = String(get(row, F.registro) ?? "").trim();
+      if (!register) return;
+      if (!groups.has(register)) groups.set(register, []);
+      groups.get(register).push(row);
+    });
+
+    const projects = [];
+
+    groups.forEach((groupRows, register) => {
+      // Selección de la coordenada válida más repetida dentro del registro.
+      const coordCounts = new Map();
+
+      groupRows.forEach(row => {
+        let x = parseCoordinate(get(row, F.x));
+        let y = parseCoordinate(get(row, F.y));
+
+        // Detección básica por si latitud/longitud vinieran invertidas.
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          const normalEcuador = x >= -92 && x <= -74 && y >= -6 && y <= 2;
+          const swappedEcuador = y >= -92 && y <= -74 && x >= -6 && x <= 2;
+          if (!normalEcuador && swappedEcuador) [x, y] = [y, x];
+
+          if (x >= -92 && x <= -74 && y >= -6 && y <= 2) {
+            const key = `${x.toFixed(6)},${y.toFixed(6)}`;
+            coordCounts.set(key, (coordCounts.get(key) || 0) + 1);
+          }
+        }
+      });
+
+      if (!coordCounts.size) return;
+
+      const coordKey = [...coordCounts.entries()].sort((a,b) => b[1]-a[1])[0][0];
+      const [lng, lat] = coordKey.split(",").map(Number);
+
+      const prices = groupRows.map(r => parsePrice(get(r, F.precio))).filter(Number.isFinite);
+
+      projects.push({
+        register,
+        project: mostCommon(groupRows.map(r => get(r, F.proyecto))),
+        province: mostCommon(groupRows.map(r => get(r, F.provincia))),
+        canton: mostCommon(groupRows.map(r => get(r, F.canton))),
+        parish: mostCommon(groupRows.map(r => get(r, F.parroquia))),
+        sector: mostCommon(groupRows.map(r => get(r, F.sector))),
+        promoter: mostCommon(groupRows.map(r => get(r, F.promotor))),
+        phone: mostCommon(groupRows.map(r => get(r, F.telefono))),
+        email: mostCommon(groupRows.map(r => get(r, F.email))),
+        avgPrice: average(prices),
+        priceObservations: prices.length,
+        housingRows: groupRows.length,
+        lng,
+        lat
+      });
+    });
+
+    return projects.sort((a,b) =>
+      (a.province || "").localeCompare(b.province || "", "es") ||
+      (a.canton || "").localeCompare(b.canton || "", "es") ||
+      (a.project || "").localeCompare(b.project || "", "es")
+    );
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  function popupHTML(p) {
+    const phoneClean = String(p.phone || "").replace(/[^\d+]/g, "");
+    const emailClean = String(p.email || "").trim();
+
+    const phoneValue = p.phone
+      ? `<a href="tel:${escapeHTML(phoneClean)}">${escapeHTML(p.phone)}</a>`
+      : "No disponible";
+
+    const emailValue = p.email
+      ? `<a href="mailto:${escapeHTML(emailClean)}">${escapeHTML(p.email)}</a>`
+      : "No disponible";
+
+    return `
+      <div class="popup-card">
+        <div class="popup-top">
+          <div class="popup-kicker">${escapeHTML(p.register)}</div>
+          <div class="popup-title">${escapeHTML(safeText(p.project))}</div>
+        </div>
+
+        <div class="popup-body">
+          <div class="popup-line">
+            <div class="popup-ico">⌂</div>
+            <div>
+              <span class="popup-label">Promotor / Constructor</span>
+              <div class="popup-value">${escapeHTML(safeText(p.promoter))}</div>
+            </div>
+          </div>
+
+          <div class="popup-line">
+            <div class="popup-ico">☎</div>
+            <div>
+              <span class="popup-label">Teléfono</span>
+              <div class="popup-value">${phoneValue}</div>
+            </div>
+          </div>
+
+          <div class="popup-line">
+            <div class="popup-ico">✉</div>
+            <div>
+              <span class="popup-label">Correo electrónico</span>
+              <div class="popup-value">${emailValue}</div>
+            </div>
+          </div>
+
+          <div class="popup-line">
+            <div class="popup-ico">⌖</div>
+            <div>
+              <span class="popup-label">Ubicación</span>
+              <div class="popup-value">${escapeHTML([p.canton,p.province].filter(Boolean).join(", ") || "No disponible")}</div>
+            </div>
+          </div>
+
+          <div class="popup-line">
+            <div class="popup-ico">◎</div>
+            <div>
+              <span class="popup-label">Coordenadas</span>
+              <div class="popup-value" style="font-family:monospace">
+                ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}
+              </div>
+            </div>
+          </div>
+
+          <div class="popup-price">
+            <span>Precio promedio de vivienda</span>
+            <strong>${escapeHTML(money(p.avgPrice))}</strong>
+          </div>
+
+          <a class="apply-btn" href="${APPLICATION_URL}" target="_blank" rel="noopener">
+            APLICA AQUÍ <span>→</span>
+          </a>
+        </div>
+      </div>`;
+  }
+
+  function renderFilters() {
+    const provSel = $("provinciaSelect");
+    const currentProvince = provSel.value;
+
+    const provinces = uniqueSorted(allProjects.map(p => p.province));
+    provSel.innerHTML = `<option value="">Todas las provincias</option>` +
+      provinces.map(p => `<option value="${escapeHTML(p)}">${escapeHTML(p)}</option>`).join("");
+
+    if (provinces.includes(currentProvince)) provSel.value = currentProvince;
+
+    renderCantonOptions();
+  }
+
+  function renderCantonOptions() {
+    const province = $("provinciaSelect").value;
+    const cantonSel = $("cantonSelect");
+    const old = cantonSel.value;
+
+    const source = province
+      ? allProjects.filter(p => p.province === province)
+      : allProjects;
+
+    const cantons = uniqueSorted(source.map(p => p.canton));
+    cantonSel.innerHTML = `<option value="">Todos los cantones</option>` +
+      cantons.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join("");
+
+    cantonSel.value = cantons.includes(old) ? old : "";
+  }
+
+  function applyFilters({ fit = true } = {}) {
+    const province = $("provinciaSelect").value;
+    const canton = $("cantonSelect").value;
+
+    visibleProjects = allProjects.filter(p =>
+      (!province || p.province === province) &&
+      (!canton || p.canton === canton)
+    );
+
+    renderMarkers();
+    renderProjectList();
+    renderStats();
+
+    if (fit) fitVisible();
+  }
+
+  function renderMarkers() {
+    markerCluster.clearLayers();
+    markerByRegister = new Map();
+
+    visibleProjects.forEach(p => {
+      const marker = L.marker([p.lat, p.lng], {
+        icon: markerIcon,
+        title: p.project || p.register
+      });
+      marker.bindPopup(popupHTML(p), { maxWidth: 320 });
+      marker.bindTooltip(
+        `${escapeHTML(p.project || p.register)}<br>` +
+        `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`,
+        { direction: "top", offset: [0, -22], opacity: 0.96 }
+      );
+      markerCluster.addLayer(marker);
+      markerByRegister.set(p.register, marker);
+    });
+  }
+
+  function renderProjectList() {
+    const list = $("projectList");
+    $("listCount").textContent = visibleProjects.length;
+
+    if (!visibleProjects.length) {
+      list.innerHTML = `<div class="empty">No existen proyectos que coincidan con los filtros seleccionados.</div>`;
+      return;
+    }
+
+    list.innerHTML = visibleProjects.map(p => `
+      <button class="project-card" data-register="${escapeHTML(p.register)}">
+        <div class="project-name">${escapeHTML(safeText(p.project))}</div>
+        <div class="project-meta">
+          <div class="place">${escapeHTML([p.canton,p.province].filter(Boolean).join(" · "))}</div>
+          <div class="price">${escapeHTML(money(p.avgPrice))}</div>
+        </div>
+        <div class="reg">${escapeHTML(p.register)}</div>
+      </button>
+    `).join("");
+
+    list.querySelectorAll(".project-card").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const reg = btn.dataset.register;
+        const p = visibleProjects.find(x => x.register === reg);
+        const marker = markerByRegister.get(reg);
+        if (!p || !marker) return;
+        map.setView([p.lat,p.lng], Math.max(map.getZoom(), 15), { animate:true });
+        setTimeout(() => marker.openPopup(), 300);
+      });
+    });
+  }
+
+  function renderStats() {
+    $("statProjects").textContent = visibleProjects.length.toLocaleString("es-EC");
+    $("statProv").textContent = new Set(visibleProjects.map(p => p.province).filter(Boolean)).size;
+    $("statCanton").textContent = new Set(visibleProjects.map(p => p.canton).filter(Boolean)).size;
+
+    const p = average(visibleProjects.map(x => x.avgPrice));
+    $("statPrice").textContent = Number.isFinite(p)
+      ? new Intl.NumberFormat("es-EC", {
+          style:"currency", currency:"USD", maximumFractionDigits:0
+        }).format(p)
+      : "—";
+  }
+
+  function fitVisible() {
+    if (!visibleProjects.length) {
+      map.setView([-1.55,-78.35], 7);
+      return;
+    }
+    if (visibleProjects.length === 1) {
+      map.setView([visibleProjects[0].lat, visibleProjects[0].lng], 15);
+      return;
+    }
+    const bounds = L.latLngBounds(visibleProjects.map(p => [p.lat,p.lng]));
+    map.fitBounds(bounds.pad(.12), { maxZoom: 13, animate:true });
+  }
+
+  // ============================================================
+  // DESCARGA DE LISTA VISIBLE
+  // ============================================================
+  function downloadVisibleList() {
+    if (!visibleProjects.length) {
+      alert("No existen registros visibles para descargar.");
+      return;
+    }
+
+    const rows = visibleProjects.map(p => ({
+      "NRO DE REGISTRO": p.register,
+      "NOMBRE DEL PROYECTO": p.project,
+      "PROVINCIA": p.province,
+      "CANTON": p.canton,
+      "PARROQUIA": p.parish,
+      "SECTOR": p.sector,
+      "PROMOTOR / CONSTRUCTOR": p.promoter,
+      "TELEFONO": p.phone,
+      "CORREO ELECTRONICO": p.email,
+      "PRECIO PROMEDIO DE VIVIENDA (USD)": Number.isFinite(p.avgPrice) ? Number(p.avgPrice.toFixed(2)) : "",
+      "X": p.lng,
+      "Y": p.lat
+    }));
+
+    const date = new Date().toISOString().slice(0,10);
+    const province = normalize($("provinciaSelect").value || "ECUADOR").replace(/\s+/g,"_");
+    const canton = normalize($("cantonSelect").value || "").replace(/\s+/g,"_");
+    const suffix = [province,canton].filter(Boolean).join("_");
+    const baseName = `PROYECTOS_YAPA_PA_TU_CASA_${suffix}_${date}`;
+
+    if (window.XLSX) {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [
+        {wch:30},{wch:38},{wch:20},{wch:20},{wch:20},{wch:24},
+        {wch:38},{wch:22},{wch:34},{wch:25},{wch:14},{wch:14}
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Proyectos visibles");
+      XLSX.writeFile(wb, baseName + ".xlsx");
+      return;
+    }
+
+    // Respaldo CSV si SheetJS no carga.
+    const headers = Object.keys(rows[0]);
+    const csvEscape = (v) => {
+      const text = String(v ?? "");
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const csv = [
+      headers.map(csvEscape).join(","),
+      ...rows.map(r => headers.map(h => csvEscape(r[h])).join(","))
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = baseName + ".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ============================================================
+  // CARGA DE GOOGLE SHEETS
+  // ============================================================
+  // Se consulta directamente el endpoint GViz de Google Sheets.
+  // El modo principal usa JSONP para evitar CORS incluso cuando
+  // el index.html se abre directamente desde el computador.
+  let activeSheetScript = null;
+  let sheetLoadTimer = null;
+  let sheetRequestId = 0;
+
+  function gvizResponseToRows(response) {
+    if (!response || response.status !== "ok" || !response.table) {
+      const details = (response?.errors || [])
+        .map(e => e?.detailed_message || e?.message || "")
+        .filter(Boolean)
+        .join(" ");
+      throw new Error(details || "Google Sheets devolvió una respuesta no válida.");
+    }
+
+    const cols = response.table.cols || [];
+    const used = new Map();
+
+    const headers = cols.map((col, idx) => {
+      let label = String(col?.label || col?.id || `COLUMNA_${idx + 1}`).trim();
+      const base = label || `COLUMNA_${idx + 1}`;
+      const count = (used.get(base) || 0) + 1;
+      used.set(base, count);
+      return count > 1 ? `${base}__${count}` : base;
+    });
+
+    return (response.table.rows || []).map(row => {
+      const obj = {};
+      const cells = row?.c || [];
+
+      headers.forEach((header, idx) => {
+        const cell = cells[idx];
+
+        if (!cell) {
+          obj[header] = "";
+        } else if (cell.f !== undefined && cell.f !== null && cell.f !== "") {
+          obj[header] = cell.f;
+        } else if (cell.v !== undefined && cell.v !== null) {
+          obj[header] = cell.v;
+        } else {
+          obj[header] = "";
+        }
+      });
+
+      return obj;
+    });
+  }
+
+  function processSheetResponse(response) {
+    try {
+      const rows = gvizResponseToRows(response);
+      allProjects = buildProjects(rows);
+
+      renderFilters();
+      applyFilters({fit:true});
+
+      setStatus(
+        "ok",
+        `Google Sheets conectado · ${allProjects.length.toLocaleString("es-EC")} proyectos`
+      );
+    } catch (err) {
+      console.error(err);
+      allProjects = [];
+      visibleProjects = [];
+      markerCluster.clearLayers();
+      renderStats();
+      $("projectList").innerHTML =
+        `<div class="empty"><b>No se pudo procesar la hoja.</b><br>${escapeHTML(err.message)}<br><br>
+        Fuente configurada:<br><small>${escapeHTML(SHEET_URL)}</small></div>`;
+      setStatus("error", "Error al procesar Google Sheets");
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  function cleanupSheetRequest() {
+    if (sheetLoadTimer) {
+      clearTimeout(sheetLoadTimer);
+      sheetLoadTimer = null;
+    }
+    if (activeSheetScript?.parentNode) {
+      activeSheetScript.parentNode.removeChild(activeSheetScript);
+    }
+    activeSheetScript = null;
+  }
+
+  async function fetchSheetFallback(requestId) {
+    try {
+      const url =
+        `${SHEET_QUERY_URL}?gid=${encodeURIComponent(SHEET_GID)}` +
+        `&headers=1&tqx=${encodeURIComponent("out:json")}` +
+        `&tq=${encodeURIComponent("select *")}` +
+        `&_=${Date.now()}`;
+
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const text = await res.text();
+      const match = text.match(
+        /google\.visualization\.Query\.setResponse\(([\s\S]*?)\);?\s*$/
+      );
+
+      if (!match) {
+        throw new Error("No se pudo interpretar la respuesta de Google Sheets.");
+      }
+
+      const response = JSON.parse(match[1]);
+      if (requestId !== sheetRequestId) return;
+
+      cleanupSheetRequest();
+      processSheetResponse(response);
+    } catch (err) {
+      if (requestId !== sheetRequestId) return;
+      console.error("Fallback de Google Sheets:", err);
+
+      cleanupSheetRequest();
+      allProjects = [];
+      visibleProjects = [];
+      markerCluster.clearLayers();
+      renderStats();
+
+      $("projectList").innerHTML =
+        `<div class="empty"><b>No fue posible leer Google Sheets.</b><br>
+        Compruebe que el documento permita lectura mediante enlace.<br><br>
+        <small>${escapeHTML(SHEET_URL)}</small></div>`;
+
+      setStatus("error", "No se pudo leer Google Sheets");
+      showLoading(false);
+    }
+  }
+
+  function loadData() {
+    const requestId = ++sheetRequestId;
+
+    cleanupSheetRequest();
+    showLoading(true);
+    setStatus("", "Conectando con Google Sheets…");
+
+    window.__yapaSheetCallback = (response) => {
+      if (requestId !== sheetRequestId) return;
+      cleanupSheetRequest();
+      processSheetResponse(response);
+    };
+
+    const tqx = "responseHandler:__yapaSheetCallback;out:json";
+    const src =
+      `${SHEET_QUERY_URL}?gid=${encodeURIComponent(SHEET_GID)}` +
+      `&headers=1&tqx=${encodeURIComponent(tqx)}` +
+      `&tq=${encodeURIComponent("select *")}` +
+      `&_=${Date.now()}`;
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.referrerPolicy = "strict-origin-when-cross-origin";
+
+    script.onerror = () => {
+      if (requestId !== sheetRequestId) return;
+      cleanupSheetRequest();
+      fetchSheetFallback(requestId);
+    };
+
+    activeSheetScript = script;
+    document.head.appendChild(script);
+
+    sheetLoadTimer = setTimeout(() => {
+      if (requestId !== sheetRequestId) return;
+      cleanupSheetRequest();
+      fetchSheetFallback(requestId);
+    }, 12000);
+  }
+
+  // ============================================================
+  // EVENTOS
+  // ============================================================
+  $("provinciaSelect").addEventListener("change", () => {
+    renderCantonOptions();
+    applyFilters({fit:true});
+  });
+
+  $("cantonSelect").addEventListener("change", () => applyFilters({fit:true}));
+
+  $("resetBtn").addEventListener("click", () => {
+    $("provinciaSelect").value = "";
+    renderCantonOptions();
+    $("cantonSelect").value = "";
+    applyFilters({fit:true});
+  });
+
+  $("downloadBtn").addEventListener("click", downloadVisibleList);
+  $("fitBtn").addEventListener("click", fitVisible);
+  $("refreshBtn").addEventListener("click", loadData);
+
+  // Ajuste de Leaflet después de cambios de tamaño.
+  window.addEventListener("resize", () => setTimeout(() => map.invalidateSize(), 100));
+
+  // Si se abre como archivo local, OpenStreetMap puede bloquear las teselas
+  // porque el navegador no envía un Referer HTTP. El paquete incluye un
+  // servidor local de un clic para probarlo correctamente.
+  if (location.protocol === "file:") {
+    const warning = $("localWarning");
+    if (warning) warning.style.display = "block";
+  }
+
+  // Inicio.
+  loadData();
+})();
+</script>
+</body>
+</html>
