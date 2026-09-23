@@ -740,8 +740,6 @@
     .territory-link:hover{color:var(--azul);text-decoration:underline}.territory-link small{display:block;color:var(--gris);font-size:9px;font-weight:500;margin-top:2px}
     .territory-bar{margin-top:5px;height:3px;border-radius:3px;background:#EFEFF7;overflow:hidden}.territory-bar span{display:block;height:100%;background:#9290D8;border-radius:3px}
     .applicants-foot{flex:none;padding:11px 16px 13px;border-top:1px solid var(--borde);background:#FAFAFD}
-    .applicants-foot .btn{font-size:10px;padding:10px}.applicants-foot .btn:disabled{opacity:.5;cursor:default}
-    .applicants-actions{display:flex;gap:7px;flex-wrap:wrap}.applicants-actions .btn-primary{flex:1}
     .applicants-status{font-size:9px;line-height:1.5;color:var(--gris);margin-top:9px;overflow-wrap:anywhere}.applicants-status.error{color:#A32A3A}
     .applicants-method{font-size:9px;line-height:1.6;color:var(--gris);margin-top:6px;max-height:145px;overflow:auto}.applicants-method summary{cursor:pointer;color:var(--azul);font-weight:700}.applicants-method p{margin:7px 0}.applicants-method a{color:var(--azul)}
     .map-layer-switches{position:absolute;z-index:700;top:12px;left:12px;border-radius:12px;background:#ffffffed;box-shadow:var(--sombra);border:1px solid var(--borde);padding:10px 12px;display:flex;flex-direction:column;gap:7px}
@@ -755,6 +753,12 @@
     @media (max-width:900px){.content{display:flex;flex-direction:column;overflow:visible}.sidebar{height:auto}.map-wrap{height:65vh;min-height:440px}.applicants-panel{height:590px;border-left:0;border-top:1px solid var(--borde)}.applicants-head{padding:16px}.applicants-total{font-size:42px}.applicants-table-wrap{min-height:180px}.applicants-table th:nth-child(2){width:100px}.applicants-table th:nth-child(3){width:65px}.project-list{max-height:220px}.applicants-table{font-size:12px}.territory-link{font-size:11px}.availability-map-note{max-width:170px}.header-status-group{max-width:100px}}
     @media (max-width:560px){.filter-grid{grid-template-columns:1fr 1fr}.map-wrap{height:60vh;min-height:420px}.density-legend{max-width:175px;font-size:8px}.availability-map-note{display:none}.header-row{gap:8px}.applicants-table-wrap{padding:0 14px}}
 
+    /* Vista inicial: proyectos; postulantes solo al activar su casilla. */
+    .applicants-panel[hidden]{display:none}
+    .content.applicants-hidden{grid-template-columns:310px minmax(0,1fr)}
+    @media (min-width:901px) and (max-width:1180px){
+      .content.applicants-hidden{grid-template-columns:255px minmax(0,1fr)}
+    }
   </style>
 </head>
 
@@ -787,7 +791,7 @@
     </div>
   </header>
 
-  <main class="content">
+  <main class="content applicants-hidden" id="viewerContent">
     <aside class="sidebar">
       <section class="filters">
         <div class="filter-title">
@@ -811,7 +815,7 @@
         </div>
 
         <div class="download-row">
-          <button class="btn btn-primary" id="downloadBtn">⇩ Descargar lista visible</button>
+          <button class="btn btn-primary" id="downloadBtn">⇩ Descargar proyectos</button>
           <button class="btn btn-icon" id="fitBtn" title="Ajustar mapa a los resultados">⌖</button>
         </div>
       </section>
@@ -848,19 +852,19 @@
     <section class="map-wrap">
       <div id="map"></div>
       <div class="map-layer-switches" aria-label="Capas del mapa">
-        <label><input type="checkbox" id="densityToggle" checked> Concentración de postulantes</label>
+        <label><input type="checkbox" id="densityToggle" aria-controls="applicantsPanel densityLegend"> Postulantes (mapa y tabla)</label>
         <label><input type="checkbox" id="projectsToggle" checked> Proyectos calificados</label>
         <button type="button" class="mini-link" id="galapagosBtn">Ver Galápagos</button>
       </div>
-      <div class="density-legend" id="densityLegend">
+      <div class="density-legend" id="densityLegend" hidden>
         <strong>Postulantes por cantón</strong>
         <div class="density-scale" aria-hidden="true"><i style="background:#FFF0B0"></i><i style="background:#F7CE65"></i><i style="background:#FA9C42"></i><i style="background:#EE5B37"></i><i style="background:#B51636"></i></div>
         <div class="density-range"><span>1–10</span><span>11–50</span><span>51–200</span><span>201–1.000</span><span>&gt;1.000</span></div>
         <p>Gris: 0 postulantes. Valores según los filtros.</p>
       </div>
       <div class="local-warning" id="localWarning">
-        <b>Vista local:</b> utiliza Cargar CSV para ver los postulantes.
-        En GitHub Pages el archivo se cargará automáticamente desde la misma carpeta del HTML.
+        <b>Vista local:</b> abre el geovisor desde GitHub Pages o un servidor web.
+        Los datos se cargan automáticamente desde sus fuentes configuradas.
       </div>
       <div class="map-legend availability-map-note">
         <div class="availability-map-icon">i</div>
@@ -870,7 +874,7 @@
         <div class="loading-box"><span class="spinner"></span> Cargando información…</div>
       </div>
     </section>
-    <aside class="applicants-panel" aria-label="Resumen de postulantes">
+    <aside class="applicants-panel" id="applicantsPanel" aria-label="Resumen de postulantes" hidden>
       <div class="applicants-head">
         <div class="applicants-kicker">Postulantes · Yapa pa' tu casa</div>
         <div class="applicants-total" id="applicantsTotal" aria-live="polite">—</div>
@@ -887,11 +891,6 @@
         </table>
       </div>
       <div class="applicants-foot">
-        <div class="applicants-actions">
-          <button class="btn btn-primary" id="downloadApplicantsBtn" disabled>⇩ Descargar tabla</button>
-          <button class="btn" id="loadCsvBtn" title="Abrir un archivo CSV de postulantes">Cargar CSV</button>
-          <input type="file" id="applicantsFile" accept=".csv,text/csv" hidden>
-        </div>
         <div class="applicants-status" id="applicantsStatus" role="status">Buscando el CSV en el repositorio…</div>
         <div class="density-note" id="unmappedNote"></div>
         <details class="applicants-method"><summary>Datos y método</summary>
@@ -901,7 +900,6 @@
           <p id="unmappedDetails"></p>
           <p>Se homologan únicamente nombres equivalentes para enlazar el mapa; por ejemplo, BIBLIAN2 con Biblián.</p>
           <p id="cartographySource"></p>
-          <p>Archivo esperado junto a este HTML: <code>studio_results_20260922_1518.csv</code>. Reemplázalo con el mismo nombre y pulsa Actualizar.</p>
         </details>
       </div>
     </aside>
@@ -1412,7 +1410,7 @@ const YapaApplicants = (() => {
       layer.on('mouseover',()=>layer.setStyle({weight:2,opacity:1}));
       layer.on('mouseout',()=>densityLayer.resetStyle(layer));
     }
-  }).addTo(map);
+  });
 
   function densityColor(count) {
     return count>1000?'#B51636':count>200?'#EE5B37':count>50?'#FA9C42':count>10?'#F7CE65':count>0?'#FFF0B0':'#E5E7ED';
@@ -1456,7 +1454,6 @@ const YapaApplicants = (() => {
     $('applicantsTableBody').innerHTML=applicantSummary.length?applicantSummary.map((g,index)=>`
       <tr><td><button type="button" class="territory-link" data-summary-index="${index}">${escapeHTML(applicantLevel==='province'?g.province:g.canton)}${applicantLevel==='canton'?`<small>${escapeHTML(g.province)}</small>`:''}</button><div class="territory-bar" aria-hidden="true"><span style="width:${g.count/max*100}%"></span></div></td><td>${formatCount(g.count)}</td><td>${formatPercent(g.count/total*100)}</td></tr>`).join(''):
       '<tr><td colspan="3" class="empty">No hay postulaciones para los filtros seleccionados.</td></tr>';
-    $('downloadApplicantsBtn').disabled=!total;
     const unmatched=visibleApplicants.filter(g=>!geometryKeys.has(g.key));
     const missing=unmatched.reduce((s,g)=>s+g.count,0);
     $('unmappedNote').textContent=missing?`${formatCount(missing)} ${missing===1?'postulación sin coincidencia territorial':'postulaciones sin coincidencia territorial'} en el mapa. Incluidas en la tabla.`:'';
@@ -1485,7 +1482,7 @@ const YapaApplicants = (() => {
     $('applicantsStatus').textContent=(applicantsReady?'No se pudo actualizar. Se conservan los datos anteriores. ':'No se pudo cargar el archivo. ')+err.message;
     if(!applicantsReady) {
       $('applicantsScope').textContent='Datos de postulantes no disponibles';
-      $('applicantsTableBody').innerHTML='<tr><td colspan="3" class="empty">Sube el CSV junto al HTML o utiliza <b>Cargar CSV</b>.</td></tr>';
+      $('applicantsTableBody').innerHTML='<tr><td colspan="3" class="empty">No se encuentran disponibles los datos de postulantes. Intenta actualizar más tarde.</td></tr>';
     }
   }
   async function loadApplicants() {
@@ -1494,7 +1491,7 @@ const YapaApplicants = (() => {
     applicantAbort=new AbortController();
     const controller=applicantAbort;
     if(location.protocol==='file:') {
-      applicantError(new Error('Para una vista local, selecciona Cargar CSV.'));return;
+      applicantError(new Error('Los datos de postulantes están disponibles al abrir el geovisor desde un servidor web.'));return;
     }
     $('applicantsStatus').classList.remove('error');
     $('applicantsStatus').textContent='Actualizando postulantes…';
@@ -1508,18 +1505,6 @@ const YapaApplicants = (() => {
     } catch(err) {
       if(requestId===applicantLoadId) applicantError(err.name==='AbortError'?new Error('La carga excedió el tiempo de espera. Pulsa Actualizar.'):err);
     } finally {clearTimeout(timeout);}
-  }
-  function downloadApplicants() {
-    if(!applicantSummary.length) return;
-    const total=visibleApplicants.reduce((s,g)=>s+g.count,0);
-    const rows=[['Provincia',...(applicantLevel==='canton'?['Cantón']:[]),'Postulantes','Porcentaje del total filtrado'],
-      ...applicantSummary.map(g=>[g.province,...(applicantLevel==='canton'?[g.canton]:[]),g.count,formatPercent(g.count/total*100)]),
-      ['TOTAL',...(applicantLevel==='canton'?['']:[]),total,'100,0']];
-    const quote=v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"';
-    const blob=new Blob(['\uFEFF'+rows.map(r=>r.map(quote).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
-    const url=URL.createObjectURL(blob),a=document.createElement('a');
-    a.href=url;a.download=`POSTULANTES_${applicantLevel==='province'?'PROVINCIAS':'CANTONES'}_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   document.querySelectorAll('.applicants-tabs button').forEach(btn=>{
     btn.addEventListener('click',()=>setApplicantLevel(btn.dataset.level));
@@ -1535,22 +1520,21 @@ const YapaApplicants = (() => {
     const g=applicantSummary[Number(btn.dataset.summaryIndex)];if(!g)return;
     selectTerritory(g.provinceKey,applicantLevel==='canton'?g.key:'');
   });
+  // Restablecer la vista inicial incluso si el navegador restaura formularios.
+  $('densityToggle').checked=false;
+  $('projectsToggle').checked=true;
   $('densityToggle').addEventListener('change',e=>{
-    if(e.target.checked)densityLayer.addTo(map);else map.removeLayer(densityLayer);
-    $('densityLegend').hidden=!e.target.checked;
+    const enabled=e.target.checked;
+    if(enabled)densityLayer.addTo(map);else map.removeLayer(densityLayer);
+    $('densityLegend').hidden=!enabled;
+    $('applicantsPanel').hidden=!enabled;
+    $('viewerContent').classList.toggle('applicants-hidden',!enabled);
+    syncLeafletLayout({fit:true});
   });
   $('projectsToggle').addEventListener('change',e=>{
     if(e.target.checked)markerCluster.addTo(map);else map.removeLayer(markerCluster);
   });
-  $('downloadApplicantsBtn').addEventListener('click',downloadApplicants);
-  $('loadCsvBtn').addEventListener('click',()=>$('applicantsFile').click());
-  $('applicantsFile').addEventListener('change',async e=>{
-    const file=e.target.files?.[0];if(!file)return;
-    const requestId=++applicantLoadId;if(applicantAbort)applicantAbort.abort();
-    try { const text=await file.text();if(requestId===applicantLoadId)acceptApplicants(text,file.name); }
-    catch(err){if(requestId===applicantLoadId)applicantError(err);}
-    e.target.value='';
-  });
+
 
 
   // ============================================================
@@ -2103,7 +2087,7 @@ const YapaApplicants = (() => {
     const bounds=L.latLngBounds([]);
     // En la vista nacional se prioriza el continente. Galápagos se consulta
     // desde su provincia o desde el botón dedicado, sin coordenadas ficticias.
-    densityLayer.eachLayer(layer=>{
+    if(map.hasLayer(densityLayer)) densityLayer.eachLayer(layer=>{
       const b=layer.getBounds();if(p||c||b.getEast()>-83)bounds.extend(b);
     });
     visibleProjects.forEach(project=>{if(p||c||project.lng>-83)bounds.extend([project.lat,project.lng]);});
